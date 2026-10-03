@@ -127,8 +127,7 @@ for mf in /etc/xdg/mimeapps.list /usr/share/applications/mimeapps.list /etc/skel
             sed -i '/\[Default Applications\]/a application/x-desktop=nebula-desktop-launcher.desktop' "$mf" 2>/dev/null || true
             sed -i '/\[Added Associations\]/a application/x-desktop=nebula-desktop-launcher.desktop;' "$mf" 2>/dev/null || true
         fi
-        for img_mime in image/jpeg image/png image/webp image/gif image/bmp image/svg+xml image/tiff; do
-            sed -i "s|^${img_mime}=.*|${img_mime}=nebula-gallery.desktop|g" "$mf" 2>/dev/null || true
+for img_mime in image/jpeg image/png image/webp image/gif image/bmp image/svg+xml image/tiff; do
             if ! grep -q "^${img_mime}=" "$mf"; then
                 sed -i "/\[Default Applications\]/a ${img_mime}=nebula-gallery.desktop" "$mf" 2>/dev/null || true
                 sed -i "/\[Added Associations\]/a ${img_mime}=nebula-gallery.desktop;" "$mf" 2>/dev/null || true
@@ -142,6 +141,7 @@ for md in /usr/share/applications/mynebula.desktop /usr/local/share/applications
     if [ -f "$md" ]; then
         sed -i '/^NoDisplay=/d' "$md" 2>/dev/null || true
         echo "NoDisplay=true" >> "$md"
+
     fi
 done
 

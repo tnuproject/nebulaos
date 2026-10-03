@@ -1650,10 +1650,10 @@ class UpdatePanel(SettingsPanel):
         rev_match = re.search(r'rev(\d+)', base_ver, re.I)
         if rev_match:
             r_num = int(rev_match.group(1))
-            clean_base = re.sub(r'[-~]?(delta\.?)?rev\d+', '', base_ver, flags=re.I).strip()
+            clean_base = re.sub(r'[-~]?(delta\.? )?rev\d+', '', base_ver, flags=re.I).strip()
             return f"{clean_base}-delta.rev{r_num} (Apollo)"
         elif current_rev is not None:
-            clean_base = re.sub(r'[-~]?(delta\.?)?rev\d+', '', base_ver, flags=re.I).strip()
+            clean_base = re.sub(r'[-~]?(delta\.? )?rev\d+', '', base_ver, flags=re.I).strip()
             return f"{clean_base}-delta.rev{current_rev} (Apollo)"
 
         return f"{base_ver} (Apollo)" if base_ver else "26.0.1 (Apollo)"
@@ -1927,10 +1927,32 @@ class AboutPanel(SettingsPanel):
         logo.set_pixel_size(84)
         banner_box.append(logo)
 
-        self.os_title = Gtk.Label(label="NebulaOS", css_classes=["title-1"])
+        os_info = {"NAME": "NebulaOS", "VERSION": "26.0.1 (Apollo)", "PRETTY_NAME": "NebulaOS 26.0.1 (Apollo)"}
+        if os.path.exists("/etc/os-release"):
+            try:
+                with open("/etc/os-release", "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if "=" in line and not line.startswith("#"):
+                            k, v = line.split("=", 1)
+                            clean_v = v.strip('"\'').replace('\\"', '').replace('"', '').strip()
+                            if "apollo" in clean_v.lower():
+                                clean_v = re.sub(r'[\(\[]?\s*apollo\s*[\)\]]?', '', clean_v, flags=re.I).strip() + " (Apollo)"
+                            os_info[k] = clean_v
+            except Exception:
+                pass
+
+        arch = os.uname().machine if hasattr(os, "uname") else "x86_64"
+        display_name = os_info.get("NAME", "NebulaOS")
+        raw_version = os_info.get("VERSION", os_info.get("VERSION_ID", "26.0.1 (Apollo)"))
+        version_str = raw_version.replace('\\"', '').replace('"', '').strip()
+        if "apollo" in version_str.lower():
+            version_str = re.sub(r'[\(\[]?\s*apollo\s*[\)\]]?', '', version_str, flags=re.I).strip() + " (Apollo)"
+
+        self.os_title = Gtk.Label(label=display_name, css_classes=["title-1"])
         banner_box.append(self.os_title)
 
-        self.os_sub = Gtk.Label(label="", css_classes=["dim-label"])
+        self.os_sub = Gtk.Label(label=f"Version {version_str} ({arch})", css_classes=["dim-label"])
         banner_box.append(self.os_sub)
 
         top_grp = Adw.PreferencesGroup()
