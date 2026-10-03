@@ -251,12 +251,17 @@ chroot "${CHROOT_TMP}" update-alternatives --set x-session-manager /usr/bin/gnom
 
 # Fix GNOME Settings About Logo: write clean os-release and nebulaos-symbol logo
 echo "[5e/8] Configuring NebulaOS symbol in os-release and icon directories..."
+SYS_VER="${RELEASE_VERSION:-$(grep -E '^VERSION=' "${ROOT_DIR}/src/release/release.conf" 2>/dev/null | head -1 | cut -d'"' -f2)}"
+[ -z "$SYS_VER" ] && SYS_VER="26.0"
+SYS_CHANNEL="${CHANNEL:-$(grep -E '^BUILD_CHANNEL=' "${ROOT_DIR}/src/release/release.conf" 2>/dev/null | head -1 | cut -d'"' -f2)}"
+[ -z "$SYS_CHANNEL" ] && SYS_CHANNEL="stable"
+
 rm -f "${CHROOT_TMP}/etc/os-release" "${CHROOT_TMP}/usr/lib/os-release"
-cat <<'OSRELEOF' > "${CHROOT_TMP}/usr/lib/os-release"
-PRETTY_NAME="NebulaOS 26.0 \"Apollo\""
+cat <<OSRELEOF > "${CHROOT_TMP}/usr/lib/os-release"
+PRETTY_NAME="NebulaOS ${SYS_VER} \"Apollo\""
 NAME="NebulaOS"
-VERSION_ID="26.0"
-VERSION="26.0 \"Apollo\""
+VERSION_ID="${SYS_VER}"
+VERSION="${SYS_VER} \"Apollo\""
 VERSION_CODENAME=apollo
 ID=nebulaos
 ID_LIKE=debian
@@ -264,9 +269,20 @@ HOME_URL="https://github.com/tnuproject/nebulaos"
 SUPPORT_URL="https://github.com/tnuproject/nebulaos/issues"
 BUG_REPORT_URL="https://github.com/tnuproject/nebulaos/issues"
 LOGO=nebulaos-symbol
-BUILD_CHANNEL=stable
+BUILD_CHANNEL=${SYS_CHANNEL}
 OSRELEOF
 cp -f "${CHROOT_TMP}/usr/lib/os-release" "${CHROOT_TMP}/etc/os-release"
+
+mkdir -p "${CHROOT_TMP}/etc/nebula" "${CHROOT_TMP}/usr/share/nebula"
+echo "${SYS_CHANNEL}" > "${CHROOT_TMP}/etc/nebula/channel"
+echo "${SYS_CHANNEL}" > "${CHROOT_TMP}/usr/share/nebula/channel"
+if [ -f "${ROOT_DIR}/src/release/delta_rev" ]; then
+    cp -f "${ROOT_DIR}/src/release/delta_rev" "${CHROOT_TMP}/etc/nebula/delta_rev"
+    cp -f "${ROOT_DIR}/src/release/delta_rev" "${CHROOT_TMP}/usr/share/nebula/delta_rev"
+fi
+if [ -f "${ROOT_DIR}/src/release/release.conf" ]; then
+    cp -f "${ROOT_DIR}/src/release/release.conf" "${CHROOT_TMP}/etc/nebula/release.conf"
+fi
 
 # Replace all Debian/distributor logos in pixmaps and icon themes (both .svg and .png) with backup
 bash "${ROOT_DIR}/scripts/replace_distro_logo.sh" "${CHROOT_TMP}"

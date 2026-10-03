@@ -58,6 +58,8 @@ let _origShowBanner = null;
 let _origHideBanner = null;
 let _origUpdateIcon = null;
 let _origShowAppsIconInit = null;
+let _origShowNotificationCompleted = null;
+let _notificationAutoDismissId = null;
 let _overviewShowingId = null;
 let _overviewHidingId = null;
 let _windowCreatedId = null;
@@ -1420,6 +1422,46 @@ function enable() {
         };
     }
 
+    // 2b. Auto-dismissal timeout: ensure notifications disappear after 4.5s and cycle to queued notifications
+    if (Main.messageTray) {
+        if (!_origShowNotificationCompleted && Main.messageTray._showNotificationCompleted) {
+            _origShowNotificationCompleted = Main.messageTray._showNotificationCompleted;
+        }
+
+        Main.messageTray._showNotificationCompleted = function() {
+            if (_origShowNotificationCompleted) {
+                _origShowNotificationCompleted.call(this);
+            }
+
+            // Clean up any previous timer
+            if (_notificationAutoDismissId) {
+                GLib.source_remove(_notificationAutoDismissId);
+                _notificationAutoDismissId = null;
+            }
+
+            // Schedule auto-dismiss after 4.5 seconds
+            _notificationAutoDismissId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 4500, () => {
+                _notificationAutoDismissId = null;
+                try {
+                    if (Main.messageTray && (Main.messageTray._notificationState === 1 || Main.messageTray._notificationState === 2)) {
+                        // Mark active notification as expired or close it gracefully
+                        Main.messageTray._notificationExpired = true;
+                        Main.messageTray._pointerInNotification = false;
+                        if (typeof Main.messageTray._updateNotificationTimeout === 'function') {
+                            Main.messageTray._updateNotificationTimeout(0);
+                        }
+                        if (typeof Main.messageTray._updateState === 'function') {
+                            Main.messageTray._updateState();
+                        }
+                    }
+                } catch (e) {
+                    log(`[Nebula] Auto-dismiss notification error: ${e}`);
+                }
+                return GLib.SOURCE_REMOVE;
+            });
+        };
+    }
+
     // 3. Dynamic Topbar
     if (global.workspace_manager) {
         _switchWorkspaceId = global.workspace_manager.connect('active-workspace-changed', () => {
@@ -1784,6 +1826,14 @@ function disable() {
         if (_origShowBanner) MessageTray.NotificationBanner.prototype._show = _origShowBanner;
         if (_origHideBanner) MessageTray.NotificationBanner.prototype._hide = _origHideBanner;
         if (_origUpdateIcon) MessageTray.NotificationBanner.prototype._updateIcon = _origUpdateIcon;
+    }
+    if (_notificationAutoDismissId) {
+        try { GLib.source_remove(_notificationAutoDismissId); } catch (e) {}
+        _notificationAutoDismissId = null;
+    }
+    if (Main.messageTray && _origShowNotificationCompleted) {
+        Main.messageTray._showNotificationCompleted = _origShowNotificationCompleted;
+        _origShowNotificationCompleted = null;
     }
 
     // Destroy Spotlight

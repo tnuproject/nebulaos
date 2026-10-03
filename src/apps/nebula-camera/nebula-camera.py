@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NebulaOS Camera
-Modern webcam and photo/video capture application built with GTK4 & GStreamer.
+Fast, modern webcam and photo/video capture application built with GTK4 & GStreamer.
 """
 
 import os
@@ -31,16 +31,21 @@ VIDEO_DIR = os.path.expanduser("~/Videos/Camera")
 os.makedirs(PHOTO_DIR, exist_ok=True)
 os.makedirs(VIDEO_DIR, exist_ok=True)
 
+
 class CameraAppWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
         self.set_title("Camera")
         self.set_default_size(840, 640)
 
+        self.pipeline = None
         self.is_recording = False
         self.record_start = 0
+        self.record_proc = None
         self.timer_seconds = 0
         self.last_photo_path = None
+        self.current_device = None
+        self.last_texture = None
 
         self.root_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_content(self.root_box)
@@ -49,16 +54,54 @@ class CameraAppWindow(Adw.ApplicationWindow):
         self.header = Adw.HeaderBar()
         self.root_box.append(self.header)
 
+        # Rescan / Switch camera button in header
+        self.btn_rescan = Gtk.Button(icon_name="view-refresh-symbolic")
+        self.btn_rescan.set_tooltip_text("Rescan for Cameras")
+        self.btn_rescan.connect("clicked", lambda _: self._rescan_cameras())
+        self.header.pack_end(self.btn_rescan)
+
         # Main viewport overlay
         self.overlay = Gtk.Overlay(hexpand=True, vexpand=True)
         self.root_box.append(self.overlay)
 
-        # Video / Camera display
+        # Viewport stack: live stream vs standby placeholder
+        self.view_stack = Gtk.Stack(hexpand=True, vexpand=True)
+        self.view_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.overlay.set_child(self.view_stack)
+
+        # 1. Live stream picture
         self.preview_pic = Gtk.Picture(hexpand=True, vexpand=True)
         self.preview_pic.set_content_fit(Gtk.ContentFit.COVER)
-        self.overlay.set_child(self.preview_pic)
+        self.view_stack.add_named(self.preview_pic, "stream")
 
-        # Floating Top Toolbar: Timer, Grid, Flash
+        # 2. Standby / No camera box
+        self.standby_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        self.standby_box.set_valign(Gtk.Align.CENTER)
+        self.standby_box.set_halign(Gtk.Align.CENTER)
+
+        icon_standby = Gtk.Image.new_from_icon_name("camera-web-symbolic")
+        icon_standby.set_pixel_size(80)
+        icon_standby.add_css_class("dim-label")
+        self.standby_box.append(icon_standby)
+
+        title_standby = Gtk.Label(label="No Camera Detected", css_classes=["title-2", "bold"])
+        self.standby_box.append(title_standby)
+
+        subtitle_standby = Gtk.Label(
+            label="Connect a webcam or USB camera to begin streaming.",
+            css_classes=["dim-label"]
+        )
+        self.standby_box.append(subtitle_standby)
+
+        btn_retry = Gtk.Button(label="Scan for Devices", css_classes=["suggested-action", "pill"])
+        btn_retry.set_halign(Gtk.Align.CENTER)
+        btn_retry.connect("clicked", lambda _: self._rescan_cameras())
+        self.standby_box.append(btn_retry)
+
+        self.view_stack.add_named(self.standby_box, "standby")
+        self.view_stack.set_visible_child_name("standby")
+
+        # Floating Top Toolbar: Timer, Recording badge
         top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         top_bar.set_valign(Gtk.Align.START)
         top_bar.set_halign(Gtk.Align.CENTER)
@@ -85,7 +128,7 @@ class CameraAppWindow(Adw.ApplicationWindow):
         self.btn_gallery = Gtk.Button(icon_name="image-x-generic-symbolic", css_classes=["circular"])
         self.btn_gallery.set_size_request(52, 52)
         self.btn_gallery.set_tooltip_text("Open Gallery")
-        self.btn_gallery.connect("clicked", lambda _: subprocess.Popen(["/usr/bin/nebula-gallery"]))
+        self.btn_gallery.connect("clicked", lambda _: self._open_gallery())
         bottom_bar.append(self.btn_gallery)
 
         # Big Shutter button (Photo)
@@ -106,7 +149,20 @@ class CameraAppWindow(Adw.ApplicationWindow):
 
         self.overlay.add_overlay(bottom_bar)
 
-        self._start_camera_stream()
+        # Cleanup on window destroy
+        self.connect("destroy", self._on_destroy)
+
+        # Start camera detection
+        GLib.idle_add(self._start_camera_stream)
+
+    def _open_gallery(self):
+        try:
+            subprocess.Popen(["/usr/bin/nebula-gallery"])
+        except Exception:
+            try:
+                subprocess.Popen(["xdg-open", PHOTO_DIR])
+            except Exception:
+                pass
 
     def _cycle_timer(self, _):
         options = [0, 3, 5, 10]
@@ -115,105 +171,160 @@ class CameraAppWindow(Adw.ApplicationWindow):
         self.timer_seconds = nxt
         self.btn_timer.set_label(f"Timer: {nxt}s" if nxt > 0 else "Timer: Off")
 
-    def _start_camera_stream(self):
-        """Start live camera preview using GStreamer if available, else fall back to ffmpeg frames."""
-        if HAS_GST:
-            devs = glob.glob("/dev/video*")
-            if devs:
-                GLib.idle_add(lambda: self._gst_start(devs[0]) or False)
-                return
-        self._ffmpeg_fallback()
+    def _rescan_cameras(self):
+        self._stop_pipeline()
+        self._start_camera_stream()
 
-    def _gst_start(self, device):
-        """Try GStreamer pipeline with gtksink or paintablesink, fall back to ffmpeg on any error."""
-        # Try both GTK sinks — gtksink (plugins-bad) or paintablesink (plugins-good)
-        for sink_name in ("gtksink", "paintablesink"):
+    def _stop_pipeline(self):
+        if self.pipeline:
             try:
-                pipeline_str = (
-                    f"v4l2src device={device} ! "
-                    "videoconvert ! "
-                    "videoscale ! "
-                    f"video/x-raw,width=640,height=480 ! "
-                    f"{sink_name} name=sink"
-                )
-                pipeline = Gst.parse_launch(pipeline_str)
-                sink_elem = pipeline.get_by_name("sink")
-                if sink_elem is None:
-                    continue
-
-                if sink_name == "gtksink":
-                    gst_widget = sink_elem.get_property("widget")
-                    if gst_widget is None:
-                        continue
-                    gst_widget.set_hexpand(True)
-                    gst_widget.set_vexpand(True)
-                    self.overlay.set_child(gst_widget)
-                else:
-                    # paintablesink: use Gtk.Picture to display the paintable
-                    paintable = sink_elem.get_property("paintable")
-                    if paintable is None:
-                        continue
-                    self.preview_pic.set_paintable(paintable)
-
-                self._pipeline = pipeline
-                pipeline.set_state(Gst.State.PLAYING)
-                bus = pipeline.get_bus()
-                bus.add_signal_watch()
-                bus.connect("message::error", self._on_gst_error)
-                return  # success
-            except Exception:
-                continue
-            except BaseException:
-                # GLib.Error from parse_launch is a BaseException subclass
-                continue
-
-        # All GStreamer sinks failed — use ffmpeg
-        self._ffmpeg_fallback()
-
-    def _on_gst_error(self, bus, msg):
-        err, _ = msg.parse_error()
-        print(f"[Camera] GStreamer error: {err}")
-        if hasattr(self, "_pipeline"):
-            try:
-                self._pipeline.set_state(Gst.State.NULL)
+                self.pipeline.set_state(Gst.State.NULL)
             except Exception:
                 pass
-        self._ffmpeg_fallback()
+            self.pipeline = None
+        self.current_device = None
 
-    def _ffmpeg_fallback(self):
-        """Use ffmpeg to grab frames periodically as a fallback."""
-        pic = self.preview_pic  # capture ref before thread starts
+    def _on_destroy(self, _):
+        self._stop_pipeline()
+        if self.record_proc:
+            try:
+                self.record_proc.terminate()
+            except Exception:
+                pass
 
-        def _stream():
-            while True:
-                devs = glob.glob("/dev/video*")
-                if devs:
-                    tmp_frame = f"/tmp/nebula_cam_frame_{os.getpid()}.jpg"
-                    cmd = ["ffmpeg", "-y", "-f", "v4l2", "-video_size", "640x480",
-                           "-i", devs[0], "-vframes", "1", tmp_frame]
-                    try:
-                        subprocess.run(cmd, stdout=subprocess.DEVNULL,
-                                       stderr=subprocess.DEVNULL, timeout=3)
-                        if os.path.exists(tmp_frame):
-                            frame = tmp_frame
-                            GLib.idle_add(lambda f=frame: pic.set_filename(f) or False)
-                    except Exception:
-                        pass
-                else:
-                    GLib.idle_add(self._show_no_camera_label)
-                    break
-                time.sleep(0.2)
+    def _start_camera_stream(self):
+        devs = sorted(glob.glob("/dev/video*"))
+        if not devs:
+            self.view_stack.set_visible_child_name("standby")
+            return False
 
-        threading.Thread(target=_stream, daemon=True).start()
+        if not HAS_GST:
+            self._start_ffmpeg_stream(devs[0])
+            return False
 
-    def _show_no_camera_label(self):
-        lbl = Gtk.Label(label="No camera detected", css_classes=["title-2", "dim-label"])
-        lbl.set_hexpand(True)
-        lbl.set_vexpand(True)
-        self.overlay.set_child(lbl)
+        # Try GTK4 paintable sink first if available, else native appsink
+        has_gtk4_sink = Gst.ElementFactory.find("gtk4paintablesink") is not None
+
+        for dev in devs:
+            if has_gtk4_sink:
+                if self._try_gtk4paintablesink(dev):
+                    return False
+            if self._try_appsink(dev):
+                return False
+
+        # If GStreamer pipelines failed, fallback to ffmpeg grabber
+        self._start_ffmpeg_stream(devs[0])
         return False
 
+    def _try_gtk4paintablesink(self, device):
+        try:
+            pipeline_str = (
+                f"v4l2src device={device} ! "
+                "videoconvert ! "
+                "videoscale ! "
+                "video/x-raw,width=1280,height=720 ! "
+                "gtk4paintablesink name=sink"
+            )
+            pipe = Gst.parse_launch(pipeline_str)
+            sink = pipe.get_by_name("sink")
+            if not sink:
+                return False
+            paintable = sink.get_property("paintable")
+            if not paintable:
+                return False
 
+            pipe.set_state(Gst.State.PLAYING)
+            bus = pipe.get_bus()
+            bus.add_signal_watch()
+            bus.connect("message::error", self._on_gst_error)
+
+            self.pipeline = pipe
+            self.current_device = device
+            self.preview_pic.set_paintable(paintable)
+            self.view_stack.set_visible_child_name("stream")
+            return True
+        except Exception:
+            return False
+
+    def _try_appsink(self, device):
+        try:
+            pipeline_str = (
+                f"v4l2src device={device} ! "
+                "videoconvert ! "
+                "videoscale ! "
+                "video/x-raw,format=RGB,width=640,height=480 ! "
+                "appsink name=sink emit-signals=true max-buffers=1 drop=true"
+            )
+            pipe = Gst.parse_launch(pipeline_str)
+            sink = pipe.get_by_name("sink")
+            if not sink:
+                return False
+
+            sink.connect("new-sample", self._on_appsink_sample)
+            pipe.set_state(Gst.State.PLAYING)
+            bus = pipe.get_bus()
+            bus.add_signal_watch()
+            bus.connect("message::error", self._on_gst_error)
+
+            self.pipeline = pipe
+            self.current_device = device
+            self.view_stack.set_visible_child_name("stream")
+            return True
+        except Exception:
+            return False
+
+    def _on_appsink_sample(self, sink):
+        try:
+            sample = sink.emit("pull-sample")
+            if not sample:
+                return Gst.FlowReturn.OK
+            buf = sample.get_buffer()
+            caps = sample.get_caps()
+            struct = caps.get_structure(0)
+            w = struct.get_value("width")
+            h = struct.get_value("height")
+            res, map_info = buf.map(Gst.MapFlags.READ)
+            if res:
+                data_bytes = bytes(map_info.data)
+                buf.unmap(map_info)
+                gbytes = GLib.Bytes.new(data_bytes)
+                texture = Gdk.MemoryTexture.new(w, h, Gdk.MemoryFormat.R8G8B8, gbytes, w * 3)
+                self.last_texture = texture
+                GLib.idle_add(lambda: self.preview_pic.set_paintable(texture) or False)
+            return Gst.FlowReturn.OK
+        except Exception:
+            return Gst.FlowReturn.OK
+
+    def _on_gst_error(self, bus, msg):
+        self._stop_pipeline()
+        devs = sorted(glob.glob("/dev/video*"))
+        if devs:
+            self._start_ffmpeg_stream(devs[0])
+        else:
+            self.view_stack.set_visible_child_name("standby")
+
+    def _start_ffmpeg_stream(self, device):
+        """Periodic frame capture fallback via ffmpeg."""
+        self.current_device = device
+        self.view_stack.set_visible_child_name("stream")
+
+        def _worker():
+            tmp_frame = f"/tmp/nebula_cam_{os.getpid()}.jpg"
+            while self.current_device == device:
+                if not os.path.exists(device):
+                    GLib.idle_add(lambda: self.view_stack.set_visible_child_name("standby") or False)
+                    break
+                cmd = ["ffmpeg", "-y", "-f", "v4l2", "-video_size", "640x480",
+                       "-i", device, "-vframes", "1", tmp_frame]
+                try:
+                    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+                    if os.path.exists(tmp_frame):
+                        GLib.idle_add(lambda f=tmp_frame: self.preview_pic.set_filename(f) or False)
+                except Exception:
+                    pass
+                time.sleep(0.15)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _on_shutter_clicked(self, _):
         if self.timer_seconds > 0:
@@ -226,58 +337,102 @@ class CameraAppWindow(Adw.ApplicationWindow):
             self._capture_photo()
             return
         self.btn_timer.set_label(f"⏳ {secs}")
-        GLib.timeout_add(1000, lambda: self._run_countdown(secs - 1))
+        GLib.timeout_add(1000, lambda: self._run_countdown(secs - 1) or False)
 
     def _capture_photo(self):
         self.btn_timer.set_label(f"Timer: {self.timer_seconds}s" if self.timer_seconds > 0 else "Timer: Off")
         ts = int(time.time())
-        target_path = os.path.join(PHOTO_DIR, f"IMG_{ts}.jpg")
+        target_path = os.path.join(PHOTO_DIR, f"IMG_{ts}.png")
 
-        devs = glob.glob("/dev/video*")
-        if devs:
-            cmd = ["ffmpeg", "-y", "-f", "v4l2", "-i", devs[0], "-vframes", "1", target_path]
+        # 1. If we have a native GTK texture, save it directly
+        if self.last_texture:
             try:
-                subprocess.run(cmd, check=False)
+                self.last_texture.save_to_png(target_path)
+                self._photo_saved_feedback(target_path)
+                return
             except Exception:
                 pass
-        else:
-            # Create a styled snapshot if no hardware video device
-            shutil_path = "/usr/share/backgrounds/nebula/plains-default.svg"
-            if os.path.exists(shutil_path):
-                import shutil
-                shutil.copyfile(shutil_path, os.path.join(PHOTO_DIR, f"IMG_{ts}.svg"))
-                target_path = os.path.join(PHOTO_DIR, f"IMG_{ts}.svg")
 
+        # 2. If video device exists, capture via ffmpeg
+        devs = sorted(glob.glob("/dev/video*"))
+        if devs:
+            jpg_target = os.path.join(PHOTO_DIR, f"IMG_{ts}.jpg")
+            cmd = ["ffmpeg", "-y", "-f", "v4l2", "-i", devs[0], "-vframes", "1", jpg_target]
+            try:
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                if os.path.exists(jpg_target):
+                    self._photo_saved_feedback(jpg_target)
+                    return
+            except Exception:
+                pass
+
+        # 3. Fallback styled snapshot
+        bg_candidate = "/usr/share/backgrounds/nebula/plains-default.svg"
+        if os.path.exists(bg_candidate):
+            import shutil
+            svg_target = os.path.join(PHOTO_DIR, f"IMG_{ts}.svg")
+            shutil.copyfile(bg_candidate, svg_target)
+            self._photo_saved_feedback(svg_target)
+
+    def _photo_saved_feedback(self, target_path):
         self.last_photo_path = target_path
 
         # Flash animation
         flash = Gtk.Box(css_classes=["osd"])
         self.overlay.add_overlay(flash)
-        GLib.timeout_add(120, lambda: self.overlay.remove_overlay(flash))
+        GLib.timeout_add(120, lambda: self.overlay.remove_overlay(flash) or False)
 
         # Audio sound
         try:
-            subprocess.Popen(["paplay", "/usr/share/sounds/freedesktop/stereo/camera-shutter.oga"])
+            subprocess.Popen(["paplay", "/usr/share/sounds/freedesktop/stereo/camera-shutter.oga"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
 
         # Notification
         try:
-            subprocess.Popen(["notify-send", "-a", "Nebula Camera", "Photo Saved", f"Saved to {os.path.basename(target_path)}"])
+            subprocess.Popen(["notify-send", "-a", "Nebula Camera", "Photo Saved",
+                              f"Saved to {os.path.basename(target_path)}"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
 
     def _toggle_video_recording(self, _):
         if not self.is_recording:
+            devs = sorted(glob.glob("/dev/video*"))
+            if not devs:
+                try:
+                    subprocess.Popen(["notify-send", "-a", "Nebula Camera", "Recording Unavailable", "No camera device detected."])
+                except Exception:
+                    pass
+                return
+
             self.is_recording = True
             self.record_start = time.time()
             self.recording_badge.set_visible(True)
             self.btn_video.add_css_class("destructive-action")
+
+            ts = int(time.time())
+            vid_target = os.path.join(VIDEO_DIR, f"VID_{ts}.mp4")
+            cmd = ["ffmpeg", "-y", "-f", "v4l2", "-i", devs[0], "-c:v", "libx264", "-preset", "ultrafast", vid_target]
+            try:
+                self.record_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                self.record_proc = None
+
             GLib.timeout_add(1000, self._record_tick)
         else:
             self.is_recording = False
             self.recording_badge.set_visible(False)
             self.btn_video.remove_css_class("destructive-action")
+            if self.record_proc:
+                try:
+                    self.record_proc.terminate()
+                    self.record_proc.wait(timeout=2)
+                except Exception:
+                    pass
+                self.record_proc = None
+
             try:
                 subprocess.Popen(["notify-send", "-a", "Nebula Camera", "Recording Saved", "Video saved to Videos/Camera"])
             except Exception:
@@ -292,19 +447,19 @@ class CameraAppWindow(Adw.ApplicationWindow):
         self.recording_badge.set_text(f"● REC {m:02d}:{s:02d}")
         return GLib.SOURCE_CONTINUE
 
-def main():
-    _wizard_done = os.path.exists(os.path.expanduser("~/.config/nebula/postinstall-wizard-completed")) or os.path.exists("/run/nebula-desktop-unlocked")
-    if not _wizard_done:
-        sys.exit(0)
 
+def main():
     GLib.set_prgname("org.nebulaos.Camera")
     GLib.set_application_name("Camera")
     app = Adw.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.NON_UNIQUE)
+
     def on_activate(a):
         win = CameraAppWindow(a)
         win.present()
+
     app.connect("activate", on_activate)
     return app.run(sys.argv)
+
 
 if __name__ == "__main__":
     sys.exit(main())

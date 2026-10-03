@@ -203,14 +203,15 @@ Type=Scalable
     with open(out_dir / "index.theme", "w", encoding="utf-8") as f:
         f.write(theme_index)
 
-def create_firefox_squircle_svg() -> str:
+def get_firefox_svg() -> str:
     """
-    Extract Firefox logo paths and gradients from Hatter's firefox SVG
-    and composite them centered over the 344x344 white squircle.
-    Searches a priority list of candidate filenames (firefox-esr is the one
-    actually installed on the ISO; plain 'firefox.svg' doesn't exist in Hatter).
+    Load official Firefox brand SVG icon (non-squircle).
     """
-    # Priority order: prefer the ESR variant that matches what's installed on the ISO
+    official = ROOT_DIR / "src" / "branding" / "icons" / "firefox-official.svg"
+    if official.exists():
+        with open(official, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+
     candidates = [
         "firefox-esr.svg",
         "Firefox.svg",
@@ -219,42 +220,13 @@ def create_firefox_squircle_svg() -> str:
         "org.mozilla.firefox.svg",
         "firefox-bin.svg",
     ]
-    hatter_firefox = None
     for name in candidates:
         candidate = HATTER_DIR / name
         if candidate.exists():
-            hatter_firefox = candidate
-            break
-    if hatter_firefox is None:
-        raise FileNotFoundError(
-            f"No Firefox SVG found in {HATTER_DIR}. Tried: {', '.join(candidates)}"
-        )
+            with open(candidate, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
 
-    with open(hatter_firefox, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
-
-    # Extract defs
-    defs_match = re.search(r"<defs[^>]*>(.*?)</defs>", content, re.DOTALL)
-    defs_content = defs_match.group(1) if defs_match else ""
-
-    # Extract paths, excluding the background rect id="rect75" and drop shadow image
-    # Keep path77, path78, path83, path79, path80, path81, path82, path84, path85, path86, path87
-    paths = re.findall(r"(<path[^>]+/>)", content)
-    logo_paths = [p for p in paths if 'id="rect75"' not in p]
-
-    # Combine into 344x344 squircle
-    # scale factor: original is 64x64, center 272x272 inside 344x344 -> scale 4.25, translate 36, 36
-    firefox_squircle = f"""<svg width="344" height="344" viewBox="0 0 344 344" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <rect width="343.04" height="343.04" rx="120" fill="white"/>
-  <defs>
-    {defs_content}
-  </defs>
-  <g transform="translate(36, 36) scale(4.25)">
-    {"".join(logo_paths)}
-  </g>
-</svg>
-"""
-    return firefox_squircle
+    return ""
 
 def create_vlc_squircle_svg() -> str:
     """
@@ -428,12 +400,13 @@ def main():
     with open(NEWICONPACK_DIR / "view-app-grid-symbolic.svg", "w", encoding="utf-8") as f:
         f.write(launchpad_svg_content)
 
-    # Generate and install composited Firefox squircle icon
-    print("  -> Compositing Firefox squircle logo...")
-    firefox_svg_content = create_firefox_squircle_svg()
-    for name in ["firefox", "firefox-esr", "mozilla-firefox", "org.mozilla.firefox"]:
-        with open(apps_dir / f"{name}.svg", "w", encoding="utf-8") as f:
-            f.write(firefox_svg_content)
+    # Install official Firefox icon (non-squircle standard branding)
+    print("  -> Deploying official Firefox icon...")
+    firefox_svg_content = get_firefox_svg()
+    if firefox_svg_content:
+        for name in ["firefox", "firefox-esr", "mozilla-firefox", "org.mozilla.firefox"]:
+            with open(apps_dir / f"{name}.svg", "w", encoding="utf-8") as f:
+                f.write(firefox_svg_content)
 
     # Generate and install composited VLC squircle icon
     print("  -> Compositing VLC squircle logo...")

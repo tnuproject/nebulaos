@@ -1475,7 +1475,7 @@ class UpdatePanel(SettingsPanel):
 
         stat_grp = Adw.PreferencesGroup(
             title="NebulaOS System Updates",
-            description=f"System update channel: {self.current_channel.upper()} � Current Version: {self.current_version}"
+            description=f"System update stream: {self.current_channel.upper()} — Current Version: {self.current_version}"
         )
         self.add(stat_grp)
 
@@ -1487,6 +1487,14 @@ class UpdatePanel(SettingsPanel):
         status_box.append(self.channel_badge)
 
         stat_grp.add(create_action_row("System Update Status", "Synchronized with GitHub Official Repository", "software-update-available-symbolic", status_box))
+
+        # Channel Selector Row (Delta vs Stable)
+        channel_names = ["Delta (Testing / Pre-release)", "Stable (Official)"]
+        chan_idx = 0 if self.current_channel == "delta" else 1
+        chan_dropdown = Gtk.DropDown.new_from_strings(channel_names)
+        chan_dropdown.set_selected(chan_idx)
+        chan_dropdown.connect("notify::selected", self._on_channel_changed)
+        stat_grp.add(create_action_row("Update Channel", "Choose release stream for system updates", "channel-insecure-symbolic", chan_dropdown))
 
         self.btn_check = Gtk.Button(label="Check for Updates", css_classes=["suggested-action"])
         self.btn_check.connect("clicked", lambda _: self._check_updates_async())
@@ -1506,13 +1514,13 @@ class UpdatePanel(SettingsPanel):
         self.details_grp.set_visible(False)
         self.add(self.details_grp)
 
-        self.version_row = create_action_row("Available Version", "�", "emblem-default-symbolic")
+        self.version_row = create_action_row("Available Version", "—", "emblem-default-symbolic")
         self.details_grp.add(self.version_row)
 
-        self.pkg_row = create_action_row("Update Package", "�", "package-x-generic-symbolic")
+        self.pkg_row = create_action_row("Update Package", "—", "package-x-generic-symbolic")
         self.details_grp.add(self.pkg_row)
 
-        self.notes_row = create_action_row("Changelog / Notes", "�", "text-x-generic-symbolic")
+        self.notes_row = create_action_row("Changelog / Notes", "—", "text-x-generic-symbolic")
         self.details_grp.add(self.notes_row)
 
         # Automatic checks
@@ -1524,8 +1532,52 @@ class UpdatePanel(SettingsPanel):
         # Trigger check automatically on open
         self._check_updates_async()
 
+    def _on_channel_changed(self, dropdown, _):
+        sel = dropdown.get_selected()
+        new_channel = "delta" if sel == 0 else "stable"
+        if new_channel != self.current_channel:
+            self.current_channel = new_channel
+            user_dir = os.path.expanduser("~/.config/nebula")
+            os.makedirs(user_dir, exist_ok=True)
+            try:
+                with open(os.path.join(user_dir, "channel"), "w") as f:
+                    f.write(new_channel + "\n")
+            except Exception:
+                pass
+            self.channel_badge.set_text(f"Channel: {self.current_channel.capitalize()}")
+            self._check_updates_async()
+
     def _detect_channel(self):
-        # 1. Check /etc/os-release for BUILD_CHANNEL
+        # 1. User preference in ~/.config/nebula/channel
+        user_cfg = os.path.expanduser("~/.config/nebula/channel")
+        if os.path.exists(user_cfg):
+            try:
+                with open(user_cfg, "r") as f:
+                    val = f.read().strip().lower()
+                    if val in ["stable", "delta"]:
+                        return val
+            except Exception:
+                pass
+
+        # 2. Check /etc/nebula/delta_rev, /usr/share/nebula/delta_rev, src/release/delta_rev
+        for rev_file in ["/etc/nebula/delta_rev", "/usr/share/nebula/delta_rev", "src/release/delta_rev"]:
+            if os.path.exists(rev_file):
+                return "delta"
+
+        # 3. Check /etc/nebula/channel or release.conf
+        for p in ["/etc/nebula/channel", "/usr/share/nebula/channel", "/etc/nebula/release.conf"]:
+            if os.path.exists(p):
+                try:
+                    with open(p, "r") as f:
+                        content = f.read().lower()
+                        if "delta" in content:
+                            return "delta"
+                        if "stable" in content:
+                            return "stable"
+                except Exception:
+                    pass
+
+        # 4. Check /etc/os-release
         if os.path.exists("/etc/os-release"):
             try:
                 with open("/etc/os-release", "r") as f:
@@ -1534,30 +1586,63 @@ class UpdatePanel(SettingsPanel):
                             val = line.split("=", 1)[1].strip().strip('"\'').lower()
                             if val in ["stable", "delta"]:
                                 return val
+                        elif line.startswith("VERSION=") or line.startswith("PRETTY_NAME="):
+                            lower_val = line.lower()
+                            if "delta" in lower_val or "rev" in lower_val:
+                                return "delta"
             except Exception:
                 pass
-        # 2. Check /etc/nebula/channel or release.conf
-        for p in ["/etc/nebula/channel", "/usr/share/nebula/channel"]:
-            if os.path.exists(p):
-                try:
-                    with open(p, "r") as f:
-                        val = f.read().strip().lower()
-                        if val in ["stable", "delta"]:
-                            return val
-                except Exception:
-                    pass
+
         return "stable"
 
     def _detect_current_version(self):
+        ver = None
         if os.path.exists("/etc/os-release"):
             try:
                 with open("/etc/os-release", "r") as f:
                     for line in f:
                         if line.startswith("VERSION="):
-                            return line.split("=", 1)[1].strip().strip('"\'')
+                            ver = line.split("=", 1)[1].strip().strip('"\'')
+                            break
             except Exception:
                 pass
-        return "26.0 \"Apollo\""
+        if not ver and os.path.exists("src/release/release.conf"):
+            try:
+                with open("src/release/release.conf", "r") as f:
+                    for line in f:
+                        if line.startswith("VERSION="):
+                            ver = line.split("=", 1)[1].strip().strip('"\'')
+                            break
+            except Exception:
+                pass
+
+        current_rev = None
+        for rev_file in ["/etc/nebula/delta_rev", "/usr/share/nebula/delta_rev", "src/release/delta_rev"]:
+            if os.path.exists(rev_file):
+                try:
+                    with open(rev_file, "r") as f:
+                        txt = f.read().strip()
+                        if txt.isdigit():
+                            current_rev = int(txt)
+                            break
+                except Exception:
+                    pass
+
+        if not ver:
+            ver = "26.0 \"Apollo\""
+
+        if current_rev is not None and "rev" not in ver.lower():
+            clean = ver.replace('"Apollo"', '').strip()
+            ver = f"{clean}-delta.rev{current_rev} \"Apollo\""
+
+        return ver
+
+    def _extract_delta_rev(self, ver_str):
+        # Match rev<N> or -rev<N> or .rev<N>
+        m = re.search(r'rev(\d+)', ver_str, re.IGNORECASE)
+        if m:
+            return int(m.group(1))
+        return None
 
     def _clean_version(self, ver_str):
         # Extract digits like 26.0 or 26.0.4 from 'NebulaOS 26.0 "Apollo"' or 'v26.0.4'
@@ -1565,12 +1650,30 @@ class UpdatePanel(SettingsPanel):
         return m.group(1) if m else ver_str.strip()
 
     def _is_newer_version(self, remote_ver, current_ver):
+        # Check delta revision progression first
+        remote_rev = self._extract_delta_rev(remote_ver)
+        current_rev = self._extract_delta_rev(current_ver)
+        if current_rev is None:
+            for rev_file in ["/etc/nebula/delta_rev", "/usr/share/nebula/delta_rev", "src/release/delta_rev"]:
+                if os.path.exists(rev_file):
+                    try:
+                        with open(rev_file, "r") as f:
+                            txt = f.read().strip()
+                            if txt.isdigit():
+                                current_rev = int(txt)
+                                break
+                    except Exception:
+                        pass
+
+        if remote_rev is not None and current_rev is not None:
+            # Strictly allow upgrade to higher revision, prevent downgrade or equal
+            return remote_rev > current_rev
+
         r_clean = self._clean_version(remote_ver)
         c_clean = self._clean_version(current_ver)
         try:
             r_parts = [int(x) for x in r_clean.split(".")]
             c_parts = [int(x) for x in c_clean.split(".")]
-            # Pad
             while len(r_parts) < len(c_parts): r_parts.append(0)
             while len(c_parts) < len(r_parts): c_parts.append(0)
             return r_parts > c_parts
@@ -1579,7 +1682,7 @@ class UpdatePanel(SettingsPanel):
 
     def _check_updates_async(self):
         self.btn_check.set_sensitive(False)
-        self.status_lbl.set_text("Checking GitHub releases...")
+        self.status_lbl.set_text(f"Checking {self.current_channel.capitalize()} updates...")
         self.details_grp.set_visible(False)
         self.btn_install.set_visible(False)
 
@@ -1600,16 +1703,22 @@ class UpdatePanel(SettingsPanel):
                     if r.get("draft"):
                         continue
                     is_prerelease = r.get("prerelease", False)
+                    rel_tag = r.get("tag_name", "").lower()
+                    rel_name = r.get("name", "").lower()
 
                     # Channel filtering:
-                    # 'delta' channel -> only pre-releases
-                    # 'stable' channel -> only stable (not pre-release)
+                    # 'delta' channel -> pick pre-releases or delta releases with highest revision
                     if self.current_channel == "delta":
-                        if is_prerelease:
-                            target_release = r
-                            break
+                        if is_prerelease or "delta" in rel_tag or "delta" in rel_name or "rev" in rel_tag:
+                            if not target_release:
+                                target_release = r
+                            else:
+                                cur_rev = self._extract_delta_rev(target_release.get("tag_name", "") + " " + target_release.get("name", ""))
+                                new_rev = self._extract_delta_rev(rel_tag + " " + rel_name)
+                                if new_rev and (cur_rev is None or new_rev > cur_rev):
+                                    target_release = r
                     else:
-                        if not is_prerelease:
+                        if not is_prerelease and "delta" not in rel_tag and "delta" not in rel_name:
                             target_release = r
                             break
             except Exception as e:
@@ -1638,7 +1747,7 @@ class UpdatePanel(SettingsPanel):
                         ota_asset = a
                         break
 
-                has_update = self._is_newer_version(rel_tag, self.current_version)
+                has_update = self._is_newer_version(rel_tag + " " + rel_name, self.current_version)
 
                 if has_update:
                     self.latest_release_info = {
@@ -2018,10 +2127,6 @@ class NebulaSettingsApp(Adw.Application):
         win.present()
 
 def main():
-    _wizard_done = os.path.exists(os.path.expanduser("~/.config/nebula/postinstall-wizard-completed")) or os.path.exists("/run/nebula-desktop-unlocked")
-    if not _wizard_done:
-        sys.exit(0)
-
     GLib.set_prgname("org.nebulaos.Settings")
     GLib.set_application_name("Settings")
     app = NebulaSettingsApp()
