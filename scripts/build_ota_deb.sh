@@ -139,13 +139,17 @@ EOF
     echo "Built: ${OUTPUT_DIR}/nebula-desktop_${PKG_VERSION}_all.deb"
 }
 
-echo "=== [1/3] Building nebula-desktop debian packages ==="
-build_deb "26.0.0"
-build_deb "26.0.1"
+echo "=== [1/3] Building nebula-desktop debian package ==="
+# DEB_VERSION is set by the CI workflow (e.g. 26.0~rev3 for delta, 26.0 for stable).
+# Fall back to reading release.conf for local builds.
+if [ -z "${DEB_VERSION:-}" ]; then
+    source "${ROOT_DIR}/src/release/release.conf"
+    DEB_VERSION="${VERSION}"
+fi
+build_deb "${DEB_VERSION}"
 
 echo "=== [2/3] Setting up APT repository in ${UPDATES_DIR} ==="
-# Put the update version (26.0.1) in the repository
-cp -f "${OUTPUT_DIR}/nebula-desktop_26.0.1_all.deb" "${UPDATES_DIR}/"
+cp -f "${OUTPUT_DIR}/nebula-desktop_${DEB_VERSION}_all.deb" "${UPDATES_DIR}/"
 
 cd "${UPDATES_DIR}"
 # Scan packages for flat repository
@@ -181,7 +185,7 @@ EOF
 cp -f "${UPDATES_DIR}/Packages" "${ROOT_DIR}/webserver/Packages" 2>/dev/null || true
 cp -f "${UPDATES_DIR}/Packages.gz" "${ROOT_DIR}/webserver/Packages.gz" 2>/dev/null || true
 cp -f "${UPDATES_DIR}/Release" "${ROOT_DIR}/webserver/Release" 2>/dev/null || true
-cp -f "${UPDATES_DIR}/nebula-desktop_26.0.1_all.deb" "${ROOT_DIR}/webserver/nebula-desktop_26.0.1_all.deb" 2>/dev/null || true
+cp -f "${UPDATES_DIR}/nebula-desktop_${DEB_VERSION}_all.deb" "${ROOT_DIR}/webserver/nebula-desktop_${DEB_VERSION}_all.deb" 2>/dev/null || true
 
 echo "=== [3/3] OTA Repository Ready! ==="
 echo "Files generated in ${UPDATES_DIR}:"

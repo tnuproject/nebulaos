@@ -58,27 +58,33 @@ jobs:
             INPUT_VER="${{ github.event.inputs.version }}"
             INPUT_CHANGELOG="${{ github.event.inputs.changelog }}"
           else
-            # Push on main defaults to delta channel
+            # Push on main/master defaults to delta channel
             SELECTED_CHANNEL="delta"
             INPUT_VER=""
             INPUT_CHANGELOG="Automated continuous integration build."
           fi
 
           # 2. Determine Version:
+          BASE_VER="$(grep -E '^VERSION=' src/release/release.conf | head -1 | cut -d'"' -f2 | sed 's/-delta.*//')"
           if [ -n "${INPUT_VER}" ]; then
             TARGET_VERSION="${INPUT_VER}"
+            DEB_VERSION="${INPUT_VER}"
+          elif [ "${SELECTED_CHANNEL}" = "delta" ]; then
+            # Read and use the persistent revision counter
+            DELTA_REV="$(cat src/release/delta_rev | tr -d '[:space:]')"
+            TARGET_VERSION="${BASE_VER}-delta.rev${DELTA_REV}"
+            # dpkg version: tilde makes rev<N> sort BEFORE the stable release (26.0~revN < 26.0)
+            # and rev2 > rev1 within the same base → no downgrade possible
+            DEB_VERSION="${BASE_VER}~rev${DELTA_REV}"
           else
-            BASE_VER="$(grep -E '^VERSION=' src/release/release.conf | head -1 | cut -d'"' -f2)"
-            if [ "${SELECTED_CHANNEL}" = "delta" ]; then
-              TIMESTAMP="$(date +'%Y%m%d%H%M')"
-              TARGET_VERSION="${BASE_VER}-delta.${TIMESTAMP}"
-            else
-              TARGET_VERSION="${BASE_VER}"
-            fi
+            TARGET_VERSION="${BASE_VER}"
+            DEB_VERSION="${BASE_VER}"
           fi
 
           echo "CHANNEL=${SELECTED_CHANNEL}" >> $GITHUB_ENV
           echo "RELEASE_VERSION=${TARGET_VERSION}" >> $GITHUB_ENV
+          echo "DEB_VERSION=${DEB_VERSION}" >> $GITHUB_ENV
+          echo "BASE_VER=${BASE_VER}" >> $GITHUB_ENV
           echo "CHANGELOG=${INPUT_CHANGELOG}" >> $GITHUB_ENV
 
           # Determine pre-release flag
@@ -92,7 +98,7 @@ jobs:
 
       - name: Stamp System Version and Channel into Configuration
         run: |
-          # Update src/release/release.conf
+          # Update src/release/release.conf with the full release version
           sed -i "s/^VERSION=.*/VERSION=\"${RELEASE_VERSION}\"/" src/release/release.conf
           sed -i "s/^BUILD_CHANNEL=.*/BUILD_CHANNEL=\"${CHANNEL}\"/" src/release/release.conf
 
@@ -115,18 +121,17 @@ jobs:
 
       - name: Generate OTA Update Package (.deb & metadata)
         run: |
-          chmod +x scripts/create_ota_update.sh
-          ./scripts/create_ota_update.sh "${RELEASE_VERSION}" "${CHANGELOG}"
+          chmod +x scripts/build_ota_deb.sh
+          # Pass the dpkg-compatible version via env; the script reads DEB_VERSION
+          bash scripts/build_ota_deb.sh
 
           mkdir -p release_assets
-          # Copy OTA artifacts
-          cp -f ota_updates/*.deb release_assets/nebulaos-ota-${RELEASE_VERSION}.deb 2>/dev/null || cp -f ota_updates/*.deb release_assets/
-          cp -f ota_updates/ota.json release_assets/ 2>/dev/null || true
+          cp -f build/debs/nebula-desktop_${DEB_VERSION}_all.deb \
+            release_assets/nebulaos-ota-${RELEASE_VERSION}.deb 2>/dev/null || true
 
       - name: Build Hybrid Live ISO
         run: |
           chmod +x scripts/patch_and_rebuild_isos.sh
-          # Run patch and build script
           sudo bash scripts/patch_and_rebuild_isos.sh
 
           # Restore ownership of build outputs from root to runner user
@@ -143,6 +148,19 @@ jobs:
             echo "Warning: ISO not found in build/output!"
           fi
 
+      - name: Increment delta revision counter
+        if: env.CHANNEL == 'delta'
+        run: |
+          CURRENT_REV="$(cat src/release/delta_rev | tr -d '[:space:]')"
+          NEXT_REV=$((CURRENT_REV + 1))
+          echo "${NEXT_REV}" > src/release/delta_rev
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/release/delta_rev
+          git commit -m "chore(release): bump delta revision to rev${NEXT_REV} [skip ci]"
+          git push origin HEAD
+
       - name: Publish GitHub Release (ISO & OTA)
         uses: softprops/action-gh-release@v2
         with:
@@ -152,22 +170,25 @@ jobs:
           draft: false
           body: |
             ## ${{ env.RELEASE_TITLE }}
-            
+
             - **Channel:** `${{ env.CHANNEL }}`
             - **Version:** `${{ env.RELEASE_VERSION }}`
             - **Type:** ${{ env.IS_PRERELEASE == 'true' && 'Pre-release (Delta / Testing)' || 'Official Stable Release' }}
-            
+
             ### Release Notes:
             ${{ env.CHANGELOG }}
-            
+
             ---
             ### Included Files:
             - **Hybrid Bootable ISO:** `NebulaOS-${{ env.RELEASE_VERSION }}-Apollo-x86_64.iso`
-            - **Partial OTA Update Package:** `nebulaos-ota-${{ env.RELEASE_VERSION }}.deb`
-            - **Metadata & Checksum:** `ota.json`, `.sha256`
-            
-            ### How to update on NebulaOS:
-            Apri l'app **Impostazioni** > **Software Updates** e clicca **Check for Updates**, oppure scarica il pacchetto `.deb` allegato.
+            - **OTA Update Package:** `nebulaos-ota-${{ env.RELEASE_VERSION }}.deb`
+            - **Checksum:** `.sha256`
+
+            ### How to update to NebulaOS ${{ env.RELEASE_VERSION }}:
+            Open **Settings** → **Software Update** and tap **Check for Updates** — the update will be applied automatically.
+            Alternatively, download the `.deb` package below and install it manually.
+
+            > **Note:** Delta revisions are strictly one-way. You can upgrade from an older revision to a newer one, but downgrading to a previous revision is not supported.
           files: |
             release_assets/*
         env:
