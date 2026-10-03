@@ -71,13 +71,19 @@ for osf in /etc/os-release /usr/lib/os-release; do
     fi
 done
 
-# Ensure mime associations for .desktop launcher
+# Ensure mime associations for .desktop launcher and nebula-gallery
 for mf in /etc/xdg/mimeapps.list /usr/share/applications/mimeapps.list; do
     if [ -f "$mf" ]; then
         if ! grep -q "application/x-desktop" "$mf"; then
             sed -i '/\[Default Applications\]/a application/x-desktop=nebula-desktop-launcher.desktop' "$mf" 2>/dev/null || true
             sed -i '/\[Added Associations\]/a application/x-desktop=nebula-desktop-launcher.desktop;' "$mf" 2>/dev/null || true
         fi
+        for img_mime in image/jpeg image/png image/webp image/gif image/bmp image/svg+xml; do
+            if ! grep -q "^${img_mime}=" "$mf"; then
+                sed -i "/\[Default Applications\]/a ${img_mime}=nebula-gallery.desktop" "$mf" 2>/dev/null || true
+                sed -i "/\[Added Associations\]/a ${img_mime}=nebula-gallery.desktop;" "$mf" 2>/dev/null || true
+            fi
+        done
     fi
 done
 

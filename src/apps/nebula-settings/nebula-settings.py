@@ -1629,13 +1629,17 @@ class UpdatePanel(SettingsPanel):
                     pass
 
         if not ver:
-            ver = "26.0 \"Apollo\""
+            ver = "26.0.1 (Apollo)"
 
-        if current_rev is not None and "rev" not in ver.lower():
-            clean = ver.replace('"Apollo"', '').strip()
-            ver = f"{clean}-delta.rev{current_rev} \"Apollo\""
+        # Clean out escaped quotes or stray quotes
+        ver_clean = ver.replace('\\"', '').replace('"', '').strip()
+        has_apollo = "apollo" in ver_clean.lower()
+        base_ver = re.sub(r'[\(\[]?\s*apollo\s*[\)\]]?', '', ver_clean, flags=re.I).strip()
 
-        return ver
+        if current_rev is not None and "rev" not in base_ver.lower():
+            return f"{base_ver}-delta.rev{current_rev} (Apollo)"
+
+        return f"{base_ver} (Apollo)" if base_ver else "26.0.1 (Apollo)"
 
     def _extract_delta_rev(self, ver_str):
         # Match rev<N> or -rev<N> or .rev<N>
@@ -1843,7 +1847,7 @@ class AboutPanel(SettingsPanel):
         logo.set_pixel_size(84)
         banner_box.append(logo)
 
-        os_info = {"NAME": "NebulaOS", "VERSION": "26.0 (Apollo)", "PRETTY_NAME": "NebulaOS 26.0 (Apollo)"}
+        os_info = {"NAME": "NebulaOS", "VERSION": "26.0.1 (Apollo)", "PRETTY_NAME": "NebulaOS 26.0.1 (Apollo)"}
         if os.path.exists("/etc/os-release"):
             try:
                 with open("/etc/os-release", "r") as f:
@@ -1851,13 +1855,19 @@ class AboutPanel(SettingsPanel):
                         line = line.strip()
                         if "=" in line and not line.startswith("#"):
                             k, v = line.split("=", 1)
-                            os_info[k] = v.strip('"\'')
+                            clean_v = v.strip('"\'').replace('\\"', '').replace('"', '').strip()
+                            if "apollo" in clean_v.lower():
+                                clean_v = re.sub(r'[\(\[]?\s*apollo\s*[\)\]]?', '', clean_v, flags=re.I).strip() + " (Apollo)"
+                            os_info[k] = clean_v
             except Exception:
                 pass
 
         arch = os.uname().machine if hasattr(os, "uname") else "x86_64"
         display_name = os_info.get("NAME", "NebulaOS")
-        version_str = os_info.get("VERSION", os_info.get("VERSION_ID", "26.0 (Apollo)"))
+        raw_version = os_info.get("VERSION", os_info.get("VERSION_ID", "26.0.1 (Apollo)"))
+        version_str = raw_version.replace('\\"', '').replace('"', '').strip()
+        if "apollo" in version_str.lower():
+            version_str = re.sub(r'[\(\[]?\s*apollo\s*[\)\]]?', '', version_str, flags=re.I).strip() + " (Apollo)"
 
         os_title = Gtk.Label(label=display_name, css_classes=["title-1"])
         banner_box.append(os_title)

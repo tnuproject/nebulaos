@@ -434,6 +434,20 @@ class GalleryWindow(Adw.ApplicationWindow):
         self.current_idx = idx
         self.show_viewer()
 
+    def open_file(self, file_path):
+        if not file_path:
+            return
+        abs_path = os.path.abspath(file_path)
+        if not os.path.exists(abs_path):
+            return
+        # If photo is not in self.photos, prepend it
+        if abs_path not in self.photos:
+            self.photos.insert(0, abs_path)
+            self.current_idx = 0
+        else:
+            self.current_idx = self.photos.index(abs_path)
+        self.show_viewer()
+
     def _share_current_photo(self, _):
         if not self.photos:
             return
@@ -544,17 +558,41 @@ class GalleryWindow(Adw.ApplicationWindow):
                     pass
 
 def main():
-    _wizard_done = os.path.exists(os.path.expanduser("~/.config/nebula/postinstall-wizard-completed")) or os.path.exists("/run/nebula-desktop-unlocked")
-    if not _wizard_done:
-        sys.exit(0)
-
     GLib.set_prgname("org.nebulaos.Gallery")
     GLib.set_application_name("Gallery")
-    app = Adw.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.NON_UNIQUE)
+    app = Adw.Application(
+        application_id=APP_ID,
+        flags=Gio.ApplicationFlags.HANDLES_OPEN
+    )
+
     def on_activate(a):
-        win = GalleryWindow(a)
+        win = a.get_active_window()
+        if not win:
+            win = GalleryWindow(a)
+        # Check command line args if any image files were passed
+        args = sys.argv[1:]
+        opened = False
+        for arg in args:
+            if not arg.startswith("-") and os.path.isfile(arg):
+                win.open_file(arg)
+                opened = True
+                break
+        if not opened and win.stack.get_visible_child_name() != "viewer":
+            win.show_grid()
         win.present()
+
+    def on_open(a, files, hint):
+        win = a.get_active_window()
+        if not win:
+            win = GalleryWindow(a)
+        if files:
+            path = files[0].get_path()
+            if path:
+                win.open_file(path)
+        win.present()
+
     app.connect("activate", on_activate)
+    app.connect("open", on_open)
     return app.run(sys.argv)
 
 if __name__ == "__main__":

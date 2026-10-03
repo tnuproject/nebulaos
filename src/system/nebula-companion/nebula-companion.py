@@ -439,7 +439,7 @@ class GallerySyncManager:
         phone_url = f"http://{phone_ip}:53319/gallery/manifest"
         req = urllib.request.Request(phone_url)
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 phone_data = json.loads(resp.read().decode())
         except Exception as e:
             with self.lock:

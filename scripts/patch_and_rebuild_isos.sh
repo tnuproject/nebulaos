@@ -258,10 +258,10 @@ SYS_CHANNEL="${CHANNEL:-$(grep -E '^BUILD_CHANNEL=' "${ROOT_DIR}/src/release/rel
 
 rm -f "${CHROOT_TMP}/etc/os-release" "${CHROOT_TMP}/usr/lib/os-release"
 cat <<OSRELEOF > "${CHROOT_TMP}/usr/lib/os-release"
-PRETTY_NAME="NebulaOS ${SYS_VER} \"Apollo\""
+PRETTY_NAME="NebulaOS ${SYS_VER} (Apollo)"
 NAME="NebulaOS"
 VERSION_ID="${SYS_VER}"
-VERSION="${SYS_VER} \"Apollo\""
+VERSION="${SYS_VER} (Apollo)"
 VERSION_CODENAME=apollo
 ID=nebulaos
 ID_LIKE=debian
