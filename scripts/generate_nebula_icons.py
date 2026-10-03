@@ -304,14 +304,32 @@ def create_launchpad_immune_svg() -> str:
     Generate an SVG that embeds the 344x344 launchpad bitmap as a base64 data URI.
     This makes the launchpad icon completely immune to GTK/librsvg symbolic recoloring
     (which would otherwise turn all 9 colored rects white on white).
+    Falls back gracefully when rsvg-convert is not available.
     """
     import base64
+    import shutil
     import subprocess
 
     png_cache = ROOT_DIR / "build" / "launchpad_344.png"
+    src_svg = NEWICONPACK_DIR / "launchpad.svg"
+
     if not png_cache.exists():
-        src_svg = NEWICONPACK_DIR / "launchpad.svg"
-        subprocess.run(["rsvg-convert", "-w", "344", "-h", "344", str(src_svg), "-o", str(png_cache)], check=True)
+        png_cache.parent.mkdir(parents=True, exist_ok=True)
+        # Try rsvg-convert first
+        if shutil.which("rsvg-convert"):
+            subprocess.run(
+                ["rsvg-convert", "-w", "344", "-h", "344", str(src_svg), "-o", str(png_cache)],
+                check=True,
+            )
+        else:
+            # Try cairosvg (pure-Python fallback)
+            try:
+                import cairosvg
+                cairosvg.svg2png(url=str(src_svg), write_to=str(png_cache), output_width=344, output_height=344)
+            except ImportError:
+                # Neither tool available — embed the raw SVG directly (no PNG wrapping)
+                print("  [warn] rsvg-convert not found, embedding raw SVG for launchpad icon")
+                return src_svg.read_text(encoding="utf-8")
 
     png_bytes = png_cache.read_bytes()
     b64_str = base64.b64encode(png_bytes).decode("utf-8")
