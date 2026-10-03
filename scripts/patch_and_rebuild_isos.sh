@@ -753,9 +753,12 @@ done
 # Build OTA deb packages and register base nebula-desktop in system dpkg database
 echo "[6d/8] Building OTA Debian packages and installing base nebula-desktop..."
 bash "${ROOT_DIR}/scripts/build_ota_deb.sh"
-cp "${ROOT_DIR}/build/debs/nebula-desktop_26.0.0_all.deb" "${CHROOT_TMP}/tmp/nebula-desktop.deb"
-chroot "${CHROOT_TMP}" dpkg -i /tmp/nebula-desktop.deb 2>/dev/null || chroot "${CHROOT_TMP}" apt-get install -f -y
-rm -f "${CHROOT_TMP}/tmp/nebula-desktop.deb"
+DEB_FILE="$(ls -1 "${ROOT_DIR}/build/debs"/nebula-desktop_*_all.deb 2>/dev/null | head -1)"
+if [ -n "${DEB_FILE}" ] && [ -f "${DEB_FILE}" ]; then
+    cp "${DEB_FILE}" "${CHROOT_TMP}/tmp/nebula-desktop.deb"
+    chroot "${CHROOT_TMP}" dpkg -i /tmp/nebula-desktop.deb 2>/dev/null || chroot "${CHROOT_TMP}" apt-get install -f -y
+    rm -f "${CHROOT_TMP}/tmp/nebula-desktop.deb"
+fi
 
 echo "[7/8] Cleaning up and repacking SquashFS..."
 chroot "${CHROOT_TMP}" apt-get clean
