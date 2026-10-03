@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Nebula Desktop Launcher
+Exec=nebula-desktop-launcher %F
+MimeType=application/x-desktop;
+NoDisplay=true
+Terminal=false
+Icon=application-x-executable

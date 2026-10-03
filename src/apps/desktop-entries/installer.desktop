@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Install NebulaOS
+GenericName=System Installer
+Comment=Install NebulaOS to your computer
+Exec=/usr/bin/install-nebula
+Icon=nebulaos-symbol
+Terminal=false
+Type=Application
+Categories=System;
+StartupNotify=true
+StartupWMClass=nebula-setup

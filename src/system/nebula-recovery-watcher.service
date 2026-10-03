@@ -1,0 +1,16 @@
+[Unit]
+Description=NebulaOS Early Boot Recovery Interceptor (Command+R)
+DefaultDependencies=no
+After=systemd-udev-settle.service plymouth-start.service
+Before=display-manager.service gdm3.service gdm.service plymouth-quit.service
+IgnoreOnIsolate=yes
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nebulaos/nebula-recovery-watcher.py
+TimeoutSec=12
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=sysinit.target

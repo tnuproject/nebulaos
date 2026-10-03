@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Clock
+GenericName=Clocks & Alarms
+Comment=World clock, alarms, stopwatch and timer
+Exec=/usr/bin/nebula-clock
+Icon=nebula-clock
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Utility;Clock;
+Keywords=clock;alarm;stopwatch;timer;world;timezone;
+StartupNotify=true
+StartupWMClass=org.nebulaos.Clock

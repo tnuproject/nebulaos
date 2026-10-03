@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# NebulaOS Recovery Launcher
+
+set -e
+
+if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    export DISPLAY=":0"
+fi
+
+if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    export GDK_BACKEND="wayland"
+else
+    export GDK_BACKEND="x11"
+fi
+
+if [ "$(id -u)" -eq 0 ] && [ -n "${DISPLAY:-}" ]; then
+    xhost +si:localuser:root 2>/dev/null || true
+fi
+
+RECOVERY_SCRIPT="/usr/share/nebula-recovery/nebula-recovery.py"
+
+if [ -f "${RECOVERY_SCRIPT}" ]; then
+    exec python3 "${RECOVERY_SCRIPT}" "$@"
+elif [ -f "$(dirname "$0")/../apps/nebula-recovery/nebula-recovery.py" ]; then
+    exec python3 "$(dirname "$0")/../apps/nebula-recovery/nebula-recovery.py" "$@"
+else
+    echo "Error: nebula-recovery.py not found" >&2
+    exit 1
+fi

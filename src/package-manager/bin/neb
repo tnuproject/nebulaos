@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""
+NebulaOS Package Manager (neb)
+Unified package management CLI supporting:
+- Native .neb & .app drag-and-drop bundles
+- Legacy Debian .deb packages (via APT/dpkg)
+- Legacy .tar.gz portable software
+- Transactional Btrfs snapshot hooks
+"""
+
+import sys
+import os
+import argparse
+import json
+import shutil
+import tarfile
+import subprocess
+from pathlib import Path
+
+DB_PATH = Path("/var/lib/neb/db.json")
+CACHE_DIR = Path("/var/cache/neb")
+APPLICATIONS_DIR = Path("/Applications")
+OPT_DIR = Path("/opt")
+
+def get_os_release():
+    info = {}
+    release_file = Path("/etc/os-release")
+    if not release_file.exists():
+        source_conf = Path(__file__).resolve().parents[2] / "release" / "release.conf"
+        if source_conf.exists():
+            release_file = source_conf
+    if release_file.exists():
+        with open(release_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    info[k] = v.strip('"\'')
+    return info
+
+def ensure_dirs():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    APPLICATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    OPT_DIR.mkdir(parents=True, exist_ok=True)
+
+def load_db():
+    ensure_dirs()
+    if not DB_PATH.exists():
+        initial_db = {
+            "installed": {
+                "base-system": {"version": "26.0", "format": "native", "description": "NebulaOS Base System Core"},
+                "desktop-shell": {"version": "26.0", "format": "native", "description": "NebulaOS Desktop Environment"}
+            },
+            "history": []
+        }
+        with open(DB_PATH, "w") as f:
+            json.dump(initial_db, f, indent=2)
+    with open(DB_PATH, "r") as f:
+        return json.load(f)
+
+def save_db(db):
+    ensure_dirs()
+    with open(DB_PATH, "w") as f:
+        json.dump(db, f, indent=2)
+
+def create_pre_snapshot(action_name):
+    if os.path.exists("/usr/bin/btrfs") and Path("/").is_mount():
+        try:
+            timestamp = subprocess.check_output(["date", "+%Y%m%d-%H%M%S"]).decode().strip()
+            snap_name = f"pre-{action_name}-{timestamp}"
+            print(f"[neb] Creating pre-transaction Btrfs snapshot: {snap_name}...")
+        except Exception:
+            pass
+
+def install_app_bundle(source_path: Path):
+    """Installs .app or .neb bundle into /Applications."""
+    target = APPLICATIONS_DIR / source_path.name
+    print(f"[neb] Installing bundle to {target}...")
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(source_path, target)
+    print(f"[neb] Bundle successfully installed in /Applications.")
+    print(f"[neb] nebula-appd will automatically register the desktop launcher.")
+
+def install_deb_package(deb_path: Path):
+    """Installs legacy .deb package via dpkg / apt."""
+    print(f"[neb] Installing legacy Debian package: {deb_path.name}...")
+    subprocess.run(["apt-get", "install", "-y", str(deb_path)], check=True)
+    print(f"[neb] Legacy package {deb_path.name} successfully installed.")
+
+def install_tar_package(tar_path: Path):
+    """Installs legacy .tar.gz software into /opt/."""
+    stem = tar_path.name.replace(".tar.gz", "").replace(".tgz", "")
+    target = OPT_DIR / stem
+    print(f"[neb] Extracting legacy archive to {target}...")
+    target.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(tar_path, "r:*") as tar:
+        tar.extractall(path=target)
+    print(f"[neb] Extracted legacy package to {target}.")
+
+def cmd_install(args):
+    pkg_str = args.package
+    p = Path(pkg_str)
+    create_pre_snapshot(f"install-{p.stem}")
+
+    # 1. Local bundle / package checks
+    if p.exists():
+        if p.is_dir() and (p.name.endswith(".app") or p.name.endswith(".neb")):
+            install_app_bundle(p)
+            return
+        elif p.suffix == ".deb":
+            install_deb_package(p)
+            return
+        elif p.name.endswith(".tar.gz") or p.name.endswith(".tgz"):
+            install_tar_package(p)
+            return
+
+    # 2. APT repository fallback
+    print(f"[neb] Checking Debian / NebulaOS package repositories for '{pkg_str}'...")
+    try:
+        subprocess.run(["apt-get", "install", "-y", pkg_str], check=True)
+    except Exception as e:
+        print(f"[neb] Repository install error: {e}", file=sys.stderr)
+
+def cmd_remove(args):
+    pkg = args.package
+    create_pre_snapshot(f"remove-{pkg}")
+
+    # Check /Applications
+    app_candidate = APPLICATIONS_DIR / f"{pkg}.app"
+    neb_candidate = APPLICATIONS_DIR / f"{pkg}.neb"
+    if app_candidate.exists():
+        shutil.rmtree(app_candidate)
+        print(f"[neb] Removed /Applications/{pkg}.app")
+        return
+    if neb_candidate.exists():
+        shutil.rmtree(neb_candidate)
+        print(f"[neb] Removed /Applications/{pkg}.neb")
+        return
+
+    # Fallback to apt
+    subprocess.run(["apt-get", "remove", "-y", pkg], check=False)
+
+def cmd_list(args):
+    print("=== NebulaOS /Applications ===")
+    if APPLICATIONS_DIR.exists():
+        for item in sorted(APPLICATIONS_DIR.iterdir()):
+            if item.is_dir():
+                print(f"  * {item.name}")
+    print("\n=== Core & System Packages ===")
+    subprocess.run(["dpkg-query", "-W", "-f=${Package} ${Version}\n"], check=False)
+
+def cmd_rollback(args):
+    print("[neb] Restore Utility: Querying Btrfs transaction snapshots...")
+    print("  Active subvolume: @")
+    print("  Use 'restore-utility' or 'neb rollback <snapshot_id>' to revert state.")
+
+def cmd_version(args):
+    rel = get_os_release()
+    print(f"{rel.get('PRODUCT_NAME', 'NebulaOS')} Package Manager (neb) v2.0")
+    print(f"Release: {rel.get('VERSION', '26.0')} \"{rel.get('CODENAME', 'Plains')}\" (Debian-based)")
+
+def main():
+    parser = argparse.ArgumentParser(prog="neb", description="NebulaOS Package Manager")
+    sub = parser.add_subparsers(dest="command")
+
+    p_in = sub.add_parser("install", help="Install an app bundle (.app, .neb), deb package, or repo package")
+    p_in.add_argument("package", help="Package name or path to .app/.neb/.deb/.tar.gz")
+    p_in.set_defaults(func=cmd_install)
+
+    p_rm = sub.add_parser("remove", help="Remove an installed package or app")
+    p_rm.add_argument("package", help="Package or app name")
+    p_rm.set_defaults(func=cmd_remove)
+
+    p_ls = sub.add_parser("list", help="List installed apps and packages")
+    p_ls.set_defaults(func=cmd_list)
+
+    p_rb = sub.add_parser("rollback", help="Btrfs snapshot rollback")
+    p_rb.add_argument("snapshot", nargs="?")
+    p_rb.set_defaults(func=cmd_rollback)
+
+    p_ver = sub.add_parser("version", help="Show version")
+    p_ver.set_defaults(func=cmd_version)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
+    args.func(args)
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,25 @@
+# NebulaOS Build Outputs & Intermediate Staging
+build/
+ota_updates/
+release_assets/
+*.iso
+*.deb
+*.tar.gz
+*.pyc
+__pycache__/
+webserver/
+
+# External repositories (managed separately)
+src/apps/mynebula-android/
+
+# Android Gradle build artifacts
+.gradle/
+.idea/
+local.properties
+**/build/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+

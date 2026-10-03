@@ -1,0 +1,59 @@
+@import url("resource:///org/gnome/shell/theme/gnome-shell.css");
+
+/* NebulaOS Dynamic Translucent Topbar */
+#panel {
+    background-color: transparent !important;
+    font-family: "Poppins", sans-serif !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+    border: none !important;
+    transition-duration: 250ms !important;
+}
+
+#panel.panel-opaque,
+#panel.solid {
+    background-color: rgba(0, 0, 0, 0.88) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#panel .panel-button:hover {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+#panel .system-status-icon {
+    icon-size: 16px !important;
+}
+
+/* Floating Detached Dock (spaced from bottom edge) */
+#dashtodockContainer.bottom {
+    margin-bottom: 36px !important;
+    padding-bottom: 0px !important;
+}
+
+#dashtodockContainer.bottom #dash {
+    margin-bottom: 36px !important;
+    border-radius: 40px !important;
+}
+
+#dashtodockContainer.bottom #dash .dash-background {
+    border-radius: 40px !important;
+    margin-bottom: 36px !important;
+}
+
+/* NebulaOS Lockscreen & GDM Login Screen Background with Blurred Wallpaper */
+#lockDialogGroup,
+.login-dialog,
+.unlock-dialog {
+    background-color: #000000 !important;
+    background-image: url("file:///usr/share/backgrounds/nebula/plains-blurred.jpg") !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+    background-position: center !important;
+}
+
+.unlock-dialog-background-box,
+.login-dialog-background-box {
+    background-color: transparent !important;
+    background-image: none !important;
+}

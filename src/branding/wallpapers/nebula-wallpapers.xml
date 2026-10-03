@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>Plains Default</name>
+    <filename>/usr/share/backgrounds/nebula/plains-default.svg</filename>
+    <options>zoom</options>
+    <pcolor>#0f172a</pcolor>
+    <scolor>#020617</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Plains Beta</name>
+    <filename>/usr/share/backgrounds/nebula/beta.svg</filename>
+    <options>zoom</options>
+    <pcolor>#0f172a</pcolor>
+    <scolor>#020617</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Pride</name>
+    <filename>/usr/share/backgrounds/nebula/pride.svg</filename>
+    <options>zoom</options>
+    <pcolor>#1a1a2e</pcolor>
+    <scolor>#16213e</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Space</name>
+    <filename>/usr/share/backgrounds/nebula/space.svg</filename>
+    <options>zoom</options>
+    <pcolor>#050510</pcolor>
+    <scolor>#000005</scolor>
+  </wallpaper>
+</wallpapers>
+

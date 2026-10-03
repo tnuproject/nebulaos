@@ -1,0 +1,35 @@
+<svg width="344" height="344" viewBox="0 0 344 344" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rainbowBase" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FB3021"/>
+      <stop offset="20%" stop-color="#FFAF03"/>
+      <stop offset="46%" stop-color="#00C853"/>
+      <stop offset="72%" stop-color="#0071FA"/>
+      <stop offset="100%" stop-color="#7946FF"/>
+    </linearGradient>
+    <radialGradient id="greenAccent" cx="90%" cy="90%" r="70%">
+      <stop offset="0%" stop-color="#00E676" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#00C853" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#00C853" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orangeAccent" cx="12%" cy="88%" r="65%">
+      <stop offset="0%" stop-color="#FB3021" stop-opacity="0.95"/>
+      <stop offset="55%" stop-color="#FFAF03" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#FFAF03" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="squircleClip">
+      <rect width="343.04" height="343.04" rx="120"/>
+    </clipPath>
+  </defs>
+  
+  <g clip-path="url(#squircleClip)">
+    <rect width="343.04" height="343.04" rx="120" fill="url(#rainbowBase)"/>
+    <rect width="343.04" height="343.04" rx="120" fill="url(#greenAccent)"/>
+    <rect width="343.04" height="343.04" rx="120" fill="url(#orangeAccent)"/>
+  </g>
+  
+  <!-- Left Mountain -->
+  <path d="M77.5554 142.848C90.1004 122.836 96.3729 112.83 105.498 112.83C114.622 112.83 120.895 122.836 133.44 142.848L202.114 252.4H68.4765C42.1307 252.4 28.9578 252.4 24.2511 243.895C19.5444 235.389 26.541 224.228 40.5342 201.906L77.5554 142.848Z" fill="white" fill-opacity="0.45"/>
+  <!-- Right Mountain -->
+  <path d="M189.773 108.45C202.348 88.082 208.635 77.8982 217.834 77.8982C227.032 77.8982 233.32 88.082 245.895 108.45L303.713 202.096C317.457 224.357 324.329 235.487 319.611 243.943C314.894 252.4 301.813 252.4 275.652 252.4H100.897L189.773 108.45Z" fill="white" fill-opacity="0.85"/>
+</svg>

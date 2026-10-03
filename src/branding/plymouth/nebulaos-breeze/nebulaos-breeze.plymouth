@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=nebulaos-breeze
+Description=NebulaOS Bootsplash Theme.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/nebulaos-breeze
+ScriptFile=/usr/share/plymouth/themes/nebulaos-breeze/nebulaos-breeze.script

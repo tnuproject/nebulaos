@@ -1,0 +1,38 @@
+# ==============================================================================
+# NebulaOS — GRUB Live Boot Configuration
+# Zero-delay hidden boot transitioning directly to Plymouth bootsplash
+# ==============================================================================
+
+set default="0"
+set timeout=1
+set timeout_style=hidden
+
+# Disable noisy graphics mode probe messages
+set gfxmode=auto
+set gfxpayload=keep
+
+insmod all_video
+insmod font
+insmod gfxterm
+insmod gettext
+insmod part_gpt
+insmod part_msdos
+insmod iso9660
+insmod ext2
+insmod btrfs
+insmod fat
+
+# Standard Boot Entry (Silent & Flicker-Free)
+menuentry "${PRODUCT_NAME} ${VERSION} (${CODENAME}) [Live Desktop]" --id live {
+    search --no-floppy --file --set=root /boot/vmlinuz
+    linux /boot/vmlinuz boot=live components username=nebula quiet splash loglevel=0 vt.global_cursor_default=0 udev.log_level=0 rd.udev.log_level=0 systemd.show_status=0 systemd.default_standard_output=null systemd.default_standard_error=null
+    initrd /boot/initrd.img
+}
+
+# NebulaOS Recovery Entry (Command+R / Ctrl+R / Alt+R)
+menuentry "NebulaOS Recovery Environment [Command+R]" --id recovery {
+    set timeout=5
+    search --no-floppy --file --set=root /boot/vmlinuz
+    linux /boot/vmlinuz boot=live components username=nebula nebula.recovery=1 quiet splash loglevel=0 vt.global_cursor_default=0 udev.log_level=0 rd.udev.log_level=0
+    initrd /boot/initrd.img
+}

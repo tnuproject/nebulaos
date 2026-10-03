@@ -1,0 +1,82 @@
+[org.gnome.desktop.interface]
+icon-theme='Nebula'
+color-scheme='prefer-dark'
+gtk-theme='Adwaita-dark'
+font-name='Poppins 10.5'
+document-font-name='Poppins 10.5'
+show-battery-percentage=false
+enable-hot-corners=false
+
+[org.gnome.desktop.background]
+picture-uri='file:///usr/share/backgrounds/nebula/plains-default.svg'
+picture-uri-dark='file:///usr/share/backgrounds/nebula/plains-default.svg'
+
+[org.gnome.desktop.wm.preferences]
+button-layout='close,maximize,minimize:'
+titlebar-font='Poppins SemiBold 11'
+
+[org.gnome.shell]
+disable-user-extensions=false
+disable-extension-version-validation=true
+enabled-extensions=['user-theme@gnome-shell-extensions.gcampax.github.com', 'nebula-shell-effects@nebulaos.org', 'blur-my-shell@aunetx', 'kiwi@kemma', 'battery-indicator-icon@Deminder']
+favorite-apps=['org.gnome.Nautilus.desktop', 'nebula-tune.desktop', 'firefox-esr.desktop', 'nebula-gallery.desktop', 'nebula-camera.desktop', 'nebula-settings.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Weather.desktop']
+always-show-log-out=true
+
+[org.gnome.mutter]
+overlay-key='Super_L'
+edge-tiling=true
+
+[org.gnome.desktop.app-folders]
+folder-children=['Utilities']
+
+[org.gnome.desktop.app-folders.folder:/org/gnome/desktop/app-folders/folders/Utilities/]
+name='System Utilities'
+translate=false
+categories=['Utility', 'System']
+excluded-apps=['software-properties-gtk.desktop', 'org.gnome.SystemMonitor.desktop', 'gnome-system-monitor.desktop', 'nm-connection-editor.desktop', 'org.gnome.Evince.desktop', 'evince.desktop', 'org.gnome.DiskUtility.desktop', 'gnome-disk-utility.desktop', 'install-software.desktop']
+
+[org.gnome.shell.extensions.user-theme]
+name='NebulaOS'
+
+[org.gnome.shell.extensions.dash-to-dock]
+dock-position='BOTTOM'
+extend-height=false
+dash-max-icon-size=78
+custom-theme-shrink=true
+dock-fixed=false
+intellihide=true
+intellihide-mode='ALL_WINDOWS'
+autohide=true
+autohide-in-fullscreen=true
+background-opacity=0.35
+show-trash=true
+show-show-apps-button=true
+show-apps-at-top=false
+
+[org.gnome.Terminal.Legacy.Settings]
+theme-variant='dark'
+
+[org.gnome.desktop.peripherals.touchpad]
+tap-to-click=true
+click-method='areas'
+two-finger-scrolling-enabled=true
+natural-scroll=false
+
+[org.gnome.nautilus.preferences]
+executable-text-activation='launch'
+
+[org.gnome.shell.extensions.battery-indicator-icon]
+status-style='slim'
+icon-orientation='horizontal'
+show-icon-text=0
+
+
+[org.gnome.shell.extensions.blur-my-shell.panel]
+blur=true
+
+[org.gnome.system.location]
+enabled=true
+
+[org.gnome.desktop.datetime]
+automatic-timezone=true
+

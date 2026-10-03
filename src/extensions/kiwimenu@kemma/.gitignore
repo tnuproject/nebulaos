@@ -1,0 +1,8 @@
+*ns.md
+*JavaScript.md
+.vscode
+samples
+.c[a-z]*/
+*.log
+locale
+*.compiled

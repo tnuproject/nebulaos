@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=MyNebula
+Comment=Manage Android device pairing, PetalDrop, and Cloud photos
+Exec=mynebula
+Icon=phone-symbolic
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Utility;Settings;
+StartupNotify=true
+Keywords=MyNebula;PetalDrop;Android;Phone;Pair;Cloud;Photos;

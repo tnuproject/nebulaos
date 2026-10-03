@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Gallery
+GenericName=Photo Viewer & Editor
+Comment=View, edit, and share photos with PetalDrop and MyNebula
+Exec=/usr/bin/nebula-gallery %F
+Icon=nebula-gallery
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Graphics;Photography;Viewer;
+MimeType=image/jpeg;image/png;image/webp;image/svg+xml;image/bmp;image/gif;
+Keywords=photos;pictures;gallery;doodle;image;petaldrop;
+StartupNotify=true
+StartupWMClass=org.nebulaos.Gallery

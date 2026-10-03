@@ -1,0 +1,130 @@
+name: Build & Publish NebulaOS OTA Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New Version (e.g. 26.0.3, or leave blank to auto-increment patch)'
+        required: false
+        default: ''
+      changelog:
+        description: 'Changelog / Release Notes'
+        required: false
+        default: 'System optimizations, security patches, and desktop updates.'
+      sync_src:
+        description: 'Commit updated version back to src repository'
+        type: boolean
+        default: true
+      publish_release:
+        description: 'Publish as GitHub Release'
+        type: boolean
+        default: true
+
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish-ota:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Debian Packaging Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev gzip python3 python3-pip
+
+      - name: Resolve Version and Changelog
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            INPUT_VER="${{ github.event.inputs.version }}"
+            INPUT_CHANGELOG="${{ github.event.inputs.changelog }}"
+          else
+            # Tag push: e.g. v26.0.2 -> 26.0.2
+            TAG="${GITHUB_REF#refs/tags/}"
+            INPUT_VER="${TAG#v}"
+            INPUT_CHANGELOG="Official release of NebulaOS ${INPUT_VER}"
+          fi
+          echo "VERSION=${INPUT_VER}" >> $GITHUB_ENV
+          echo "CHANGELOG=${INPUT_CHANGELOG}" >> $GITHUB_ENV
+
+      - name: Generate OTA Package & APT Repository
+        run: |
+          chmod +x scripts/create_ota_update.sh
+          ./scripts/create_ota_update.sh "${VERSION}" "${CHANGELOG}"
+          
+          # Read newly generated version from release.conf
+          RESOLVED_VER="$(grep -E '^VERSION=' src/release/release.conf | head -1 | cut -d'"' -f2)"
+          echo "RESOLVED_VER=${RESOLVED_VER}" >> $GITHUB_ENV
+
+      - name: Sync Version Bump to Source Repository
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_src == 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/release/release.conf
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): bump version to ${RESOLVED_VER} [skip ci]"
+            git push origin HEAD:${{ github.ref }}
+          fi
+
+      - name: Create GitHub Release with OTA Assets
+        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.RESOLVED_VER }}"
+          name: "NebulaOS OTA Update ${{ env.RESOLVED_VER }}"
+          body: |
+            ## NebulaOS OTA Update ${{ env.RESOLVED_VER }}
+            
+            **Changelog:**
+            ${{ env.CHANGELOG }}
+            
+            ---
+            ### How to update on NebulaOS:
+            - **Automatic (GNOME Software):** Open **App Store / Updates** and click **Update All**.
+            - **Terminal (APT):**
+              ```bash
+              sudo apt update && sudo apt upgrade -y
+              ```
+            
+            ### Included Packages & Repository Metadata:
+            - `nebula-desktop_${{ env.RESOLVED_VER }}_all.deb`
+            - `Packages`, `Packages.gz`
+            - `Release`
+            - `ota.json`
+          files: |
+            ota_updates/*.deb
+            ota_updates/Packages
+            ota_updates/Packages.gz
+            ota_updates/Release
+            ota_updates/ota.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to Dedicated ota_updates Repository (Optional)
+        if: ${{ env.OTA_REPO_TOKEN != '' }}
+        env:
+          OTA_REPO_TOKEN: ${{ secrets.OTA_REPO_TOKEN }}
+        run: |
+          # If an external ota_updates repository is configured with a secret, deploy the APT files there
+          mkdir -p /tmp/remote_ota
+          cd /tmp/remote_ota
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp -r ${{ github.workspace }}/ota_updates/* .
+          git add -A
+          git commit -m "OTA Update: ${{ env.RESOLVED_VER }}"
+          git branch -M main
+          git remote add origin "https://x-access-token:${OTA_REPO_TOKEN}@github.com/${{ github.repository_owner }}/ota_updates.git"
+          git push -f origin main || echo "Remote ota_updates repo push skipped or repo does not exist yet"

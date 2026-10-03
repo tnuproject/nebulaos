@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Calendar
+GenericName=Calendar & Events
+Comment=Schedule appointments and manage your daily events
+Exec=/usr/bin/nebula-calendar
+Icon=nebula-calendar
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Office;Calendar;
+Keywords=calendar;events;date;schedule;planner;
+StartupNotify=true
+StartupWMClass=org.nebulaos.Calendar

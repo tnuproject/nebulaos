@@ -1,0 +1,8 @@
+<svg width="344" height="344" viewBox="0 0 344 344" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="343.04" height="343.04" rx="120" fill="#3B73FF"/>
+<rect x="172.132" y="59" width="125.129" height="125.128" rx="62.564" fill="#FFA132" fill-opacity="0.95"/>
+<foreignObject x="-4.13829" y="24.8637" width="351.856" height="293.37"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(17.07px);clip-path:url(#bgblur_0_70_5_clip_path);height:100%;width:100%"></div></foreignObject><path data-figma-bg-blur-radius="34.1383" d="M30 171.549C30 233.707 80.3894 284.096 142.548 284.096H236.734C279.175 284.096 313.58 249.692 313.58 207.252C313.58 170.167 287.31 139.217 252.364 131.997C249.465 131.398 247 129.45 245.82 126.735C228.499 86.876 188.779 59.002 142.548 59.002C80.3894 59.002 30 109.391 30 171.549Z" fill="white" fill-opacity="0.8"/>
+<defs>
+<clipPath id="bgblur_0_70_5_clip_path" transform="translate(4.13829 -24.8637)"><path d="M30 171.549C30 233.707 80.3894 284.096 142.548 284.096H236.734C279.175 284.096 313.58 249.692 313.58 207.252C313.58 170.167 287.31 139.217 252.364 131.997C249.465 131.398 247 129.45 245.82 126.735C228.499 86.876 188.779 59.002 142.548 59.002C80.3894 59.002 30 109.391 30 171.549Z"/>
+</clipPath></defs>
+</svg>

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Settings
+GenericName=System Settings
+Comment=Configure NebulaOS system settings
+Exec=/usr/bin/nebula-settings
+Icon=nebula-settings
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Settings;DesktopSettings;
+Keywords=settings;preferences;system;network;bluetooth;display;sound;battery;appearance;keyboard;language;security;location;
+StartupNotify=true
+StartupWMClass=org.nebulaos.Settings
+X-GNOME-UsesNotifications=true

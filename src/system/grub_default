@@ -1,0 +1,11 @@
+# /etc/default/grub for NebulaOS
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=0
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_RECORDFAIL_TIMEOUT=0
+GRUB_HIDDEN_TIMEOUT_QUIET=true
+GRUB_DISTRIBUTOR="NebulaOS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 vt.global_cursor_default=0 udev.log_level=0 rd.udev.log_level=0 systemd.show_status=0 systemd.default_standard_output=null systemd.default_standard_error=null"
+GRUB_CMDLINE_LINUX=""
+GRUB_GFXMODE=auto
+GRUB_GFXPAYLOAD_LINUX=keep

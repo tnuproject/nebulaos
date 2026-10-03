@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# NebulaOS .desktop file direct launcher
+set -e
+
+# Block launching arbitrary applications before installer/welcome setup completes
+WIZARD_DONE=0
+if [ -f "$HOME/.config/nebula/postinstall-wizard-completed" ] || [ -f "/run/nebula-desktop-unlocked" ]; then
+    WIZARD_DONE=1
+fi
+
+for f in "$@"; do
+    [ -f "$f" ] || continue
+    if [ "$WIZARD_DONE" -eq 0 ]; then
+        case "$f" in
+            *installer*|*welcome*|*setup*|*recovery*) ;;
+            *) exit 0 ;;
+        esac
+    fi
+    chmod +x "$f" 2>/dev/null || true
+    gio set "$f" metadata::trusted true 2>/dev/null || true
+    gio launch "$f" &
+done

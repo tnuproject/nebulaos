@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="50%" stop-color="#1b2838" />
+      <stop offset="100%" stop-color="#2d3748" />
+    </linearGradient>
+    <linearGradient id="sunGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e28743" />
+      <stop offset="50%" stop-color="#f4a261" />
+      <stop offset="100%" stop-color="#e76f51" />
+    </linearGradient>
+    <linearGradient id="plainsGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#31572c" />
+      <stop offset="100%" stop-color="#132a13" />
+    </linearGradient>
+    <linearGradient id="plainsGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f772d" />
+      <stop offset="100%" stop-color="#1b4332" />
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#c084fc" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Circular Badge Background -->
+  <circle cx="256" cy="256" r="240" fill="url(#skyGrad)" stroke="url(#ringGrad)" stroke-width="8" />
+
+  <!-- Distant Stellar Stars -->
+  <circle cx="120" cy="120" r="2.5" fill="#ffffff" opacity="0.8" />
+  <circle cx="180" cy="80" r="1.8" fill="#ffffff" opacity="0.6" />
+  <circle cx="340" cy="100" r="2.2" fill="#ffffff" opacity="0.7" />
+  <circle cx="390" cy="160" r="1.5" fill="#ffffff" opacity="0.5" />
+  <circle cx="280" cy="60" r="3" fill="#ffffff" opacity="0.9" />
+
+  <!-- Glowing Celestial Body (Rising Sun / Nebula) -->
+  <circle cx="256" cy="220" r="70" fill="url(#sunGrad)" filter="url(#glow)" opacity="0.9" />
+
+  <!-- Sweeping Plains Contours -->
+  <path d="M 20 340 Q 140 280 280 320 T 492 340 L 492 480 Q 380 500 256 500 Q 132 500 20 480 Z" fill="url(#plainsGrad1)" opacity="0.95" />
+  <path d="M 16 380 Q 180 320 340 370 T 496 390 L 496 480 Q 380 500 256 500 Q 132 500 16 480 Z" fill="url(#plainsGrad2)" opacity="0.98" />
+
+  <!-- Modern Release Typography -->
+  <text x="256" y="440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">PLAINS 26.0</text>
+  <text x="256" y="468" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600" fill="#94a3b8" text-anchor="middle" letter-spacing="3">OFFICIAL RELEASE</text>
+</svg>

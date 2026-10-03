@@ -1,0 +1,12 @@
+[Unit]
+Description=NebulaOS Applications Directory and GNOME Grid Synchronizer
+After=gnome-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/nebulaos/nebula-apps-sync.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

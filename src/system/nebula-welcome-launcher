@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Nebula Welcome Post-Installation Wizard Launcher
+# Runs AFTER GNOME has started (via XDG autostart).
+# Locks Super key and Alt+F4, hides dock, runs wizard, then restores everything.
+
+# Never run on live session media or during install
+if [ -f /run/live/medium/live/filesystem.squashfs ] || \
+   [ -f /run/nebula-installer-active ] || \
+   [ -d /run/live ] || \
+   grep -q 'boot=live' /proc/cmdline 2>/dev/null; then
+    exit 0
+fi
+
+# Do not run if wizard was already completed
+if [ -f "$HOME/.config/nebula/postinstall-wizard-completed" ]; then
+    touch /run/nebula-desktop-unlocked 2>/dev/null || true
+    exit 0
+fi
+
+# Signal that nebula-welcome is running (used by shell extension to hide dock)
+touch /run/nebula-welcome-active 2>/dev/null || true
+
+# Disable Super key (overlay key) and Alt+F4 during wizard
+gsettings set org.gnome.mutter overlay-key '' 2>/dev/null || true
+gsettings set org.gnome.shell.keybindings toggle-overview "['']" 2>/dev/null || true
+gsettings set org.gnome.shell.keybindings toggle-application-view "['']" 2>/dev/null || true
+gsettings set org.gnome.desktop.wm.keybindings close "['']" 2>/dev/null || true
+gsettings set org.gnome.desktop.wm.keybindings switch-applications "['']" 2>/dev/null || true
+gsettings set org.gnome.desktop.wm.keybindings switch-windows "['']" 2>/dev/null || true
+
+# Launch welcome wizard (blocks until complete)
+python3 /usr/share/nebula-welcome/nebula-welcome.py || true
+
+# Wizard complete — ensure flags are set
+mkdir -p "$HOME/.config/nebula" 2>/dev/null || true
+touch "$HOME/.config/nebula/postinstall-wizard-completed" 2>/dev/null || true
+touch /run/nebula-desktop-unlocked 2>/dev/null || true
+rm -f /run/nebula-welcome-active 2>/dev/null || true
+
+# Restore Super key and keyboard shortcuts
+gsettings reset org.gnome.mutter overlay-key 2>/dev/null || true
+gsettings reset org.gnome.shell.keybindings toggle-overview 2>/dev/null || true
+gsettings reset org.gnome.shell.keybindings toggle-application-view 2>/dev/null || true
+gsettings reset org.gnome.desktop.wm.keybindings close 2>/dev/null || true
+gsettings reset org.gnome.desktop.wm.keybindings switch-applications 2>/dev/null || true
+gsettings reset org.gnome.desktop.wm.keybindings switch-windows 2>/dev/null || true
+
+# Enable dash-to-dock (persists across reboots via user dconf, overrides system gschema default)
+gsettings set org.gnome.shell enabled-extensions \
+    "['dash-to-dock@micxgx.gmail.com', 'user-theme@gnome-shell-extensions.gcampax.github.com', 'nebula-shell-effects@nebulaos.org', 'blur-my-shell@aunetx', 'kiwi@kemma', 'battery-indicator-icon@Deminder']" \
+    2>/dev/null || true

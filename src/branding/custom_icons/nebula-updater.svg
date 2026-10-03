@@ -1,0 +1,31 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="arrowGrad" x1="180" y1="140" x2="332" y2="372" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0e7ff"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="8" width="512" height="512" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#1e3a8a" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect x="40" y="40" width="432" height="432" rx="100" fill="url(#bgGrad)" filter="url(#shadow)"/>
+
+  <!-- Inner subtle border -->
+  <rect x="42" y="42" width="428" height="428" rx="98" stroke="white" stroke-opacity="0.2" stroke-width="4"/>
+
+  <!-- Update Circular Arrows Icon -->
+  <g transform="translate(256, 256)">
+    <!-- Top-right clockwise arrow -->
+    <path d="M 0 -130 A 130 130 0 0 1 125 -35 L 145 -55 L 140 30 L 55 25 L 75 5 A 85 85 0 0 0 0 -85 Z" fill="url(#arrowGrad)"/>
+    <!-- Bottom-left counter clockwise arrow -->
+    <path d="M 0 130 A 130 130 0 0 1 -125 35 L -145 55 L -140 -30 L -55 -25 L -75 -5 A 85 85 0 0 0 0 85 Z" fill="url(#arrowGrad)"/>
+    <!-- Center glowing dot -->
+    <circle cx="0" cy="0" r="28" fill="white" opacity="0.9"/>
+  </g>
+</svg>

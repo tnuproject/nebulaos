@@ -1,0 +1,8 @@
+{
+  "uuid": "nebula-shell-effects@nebulaos.org",
+  "name": "Nebula Shell Effects",
+  "description": "Fluid bubble notifications, Launchpad dock-up animation, Lockscreen & GDM user selector, and dynamic topbar for NebulaOS",
+  "shell-version": ["43", "43.9", "44", "45", "46", "47"],
+  "session-modes": ["user", "unlock-dialog", "gdm"],
+  "version": 1
+}

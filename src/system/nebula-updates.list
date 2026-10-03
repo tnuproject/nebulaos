@@ -1,0 +1,2 @@
+# NebulaOS Official OTA Updates Repository (GNOME Software / APT)
+deb [trusted=yes] https://tnuproject.github.io/updates/ ./

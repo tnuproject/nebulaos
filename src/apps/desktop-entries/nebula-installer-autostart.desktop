@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Install NebulaOS
+Comment=Automatically launch NebulaOS installer on live session boot
+Exec=/usr/bin/nebula-session-init
+Icon=nebulaos-symbol
+Terminal=false
+Categories=System;
+X-GNOME-Autostart-enabled=true
+StartupNotify=true
+StartupWMClass=nebula-setup

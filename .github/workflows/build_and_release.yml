@@ -1,0 +1,170 @@
+name: Build & Release NebulaOS ISO & OTA Update
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.gitignore'
+
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release Channel (stable = official release, delta = pre-release)'
+        required: true
+        type: choice
+        options:
+          - delta
+          - stable
+        default: 'delta'
+      version:
+        description: 'System Version (e.g. 26.0, 26.0.1 - required if stable)'
+        required: false
+        default: ''
+      changelog:
+        description: 'Release Notes / Changelog'
+        required: false
+        default: 'System updates, performance improvements, and security patches.'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debootstrap dpkg-dev gzip xorriso grub-pc-bin grub-efi-amd64-bin \
+            mtools squashfs-tools dosfstools e2fsprogs gettext-base \
+            python3 python3-pip
+
+      - name: Resolve Version, Channel & Metadata
+        id: setup
+        run: |
+          # 1. Determine Channel:
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SELECTED_CHANNEL="${{ github.event.inputs.channel }}"
+            INPUT_VER="${{ github.event.inputs.version }}"
+            INPUT_CHANGELOG="${{ github.event.inputs.changelog }}"
+          else
+            # Push on main defaults to delta channel
+            SELECTED_CHANNEL="delta"
+            INPUT_VER=""
+            INPUT_CHANGELOG="Automated continuous integration build."
+          fi
+
+          # 2. Determine Version:
+          if [ -n "${INPUT_VER}" ]; then
+            TARGET_VERSION="${INPUT_VER}"
+          else
+            BASE_VER="$(grep -E '^VERSION=' src/release/release.conf | head -1 | cut -d'"' -f2)"
+            if [ "${SELECTED_CHANNEL}" = "delta" ]; then
+              TIMESTAMP="$(date +'%Y%m%d%H%M')"
+              TARGET_VERSION="${BASE_VER}-delta.${TIMESTAMP}"
+            else
+              TARGET_VERSION="${BASE_VER}"
+            fi
+          fi
+
+          echo "CHANNEL=${SELECTED_CHANNEL}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${TARGET_VERSION}" >> $GITHUB_ENV
+          echo "CHANGELOG=${INPUT_CHANGELOG}" >> $GITHUB_ENV
+
+          # Determine pre-release flag
+          if [ "${SELECTED_CHANNEL}" = "delta" ]; then
+            echo "IS_PRERELEASE=true" >> $GITHUB_ENV
+            echo "RELEASE_TITLE=NebulaOS ${TARGET_VERSION} (Delta Channel)" >> $GITHUB_ENV
+          else
+            echo "IS_PRERELEASE=false" >> $GITHUB_ENV
+            echo "RELEASE_TITLE=NebulaOS ${TARGET_VERSION} \"Apollo\"" >> $GITHUB_ENV
+          fi
+
+      - name: Stamp System Version and Channel into Configuration
+        run: |
+          # Update src/release/release.conf
+          sed -i "s/^VERSION=.*/VERSION=\"${RELEASE_VERSION}\"/" src/release/release.conf
+          sed -i "s/^BUILD_CHANNEL=.*/BUILD_CHANNEL=\"${CHANNEL}\"/" src/release/release.conf
+
+          # Update sysroot os-release
+          mkdir -p build/sysroot/etc
+          cat <<EOF > build/sysroot/etc/os-release
+          PRETTY_NAME="NebulaOS ${RELEASE_VERSION} \"Apollo\""
+          NAME="NebulaOS"
+          VERSION_ID="${RELEASE_VERSION}"
+          VERSION="${RELEASE_VERSION} \"Apollo\""
+          VERSION_CODENAME=apollo
+          ID=nebulaos
+          ID_LIKE=debian
+          HOME_URL="https://github.com/tnuproject/nebulaos"
+          SUPPORT_URL="https://github.com/tnuproject/nebulaos/issues"
+          BUG_REPORT_URL="https://github.com/tnuproject/nebulaos/issues"
+          LOGO=nebulaos-symbol
+          BUILD_CHANNEL=${CHANNEL}
+          EOF
+
+      - name: Generate OTA Update Package (.deb & metadata)
+        run: |
+          chmod +x scripts/create_ota_update.sh
+          ./scripts/create_ota_update.sh "${RELEASE_VERSION}" "${CHANGELOG}"
+
+          mkdir -p release_assets
+          # Copy OTA artifacts
+          cp -f ota_updates/*.deb release_assets/nebulaos-ota-${RELEASE_VERSION}.deb 2>/dev/null || cp -f ota_updates/*.deb release_assets/
+          cp -f ota_updates/ota.json release_assets/ 2>/dev/null || true
+
+      - name: Build Hybrid Live ISO
+        run: |
+          chmod +x scripts/patch_and_rebuild_isos.sh
+          # Run patch and build script
+          sudo bash scripts/patch_and_rebuild_isos.sh
+
+          ISO_SRC="$(ls -1 build/output/NebulaOS-*.iso 2>/dev/null | head -1)"
+          if [ -f "${ISO_SRC}" ]; then
+            ISO_DEST="release_assets/NebulaOS-${RELEASE_VERSION}-Apollo-x86_64.iso"
+            mv "${ISO_SRC}" "${ISO_DEST}"
+            echo "ISO Generated: ${ISO_DEST}"
+            sha256sum "${ISO_DEST}" > "${ISO_DEST}.sha256"
+          else
+            echo "Warning: ISO not found in build/output!"
+          fi
+
+      - name: Publish GitHub Release (ISO & OTA)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.RELEASE_VERSION }}"
+          name: "${{ env.RELEASE_TITLE }}"
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
+          draft: false
+          body: |
+            ## ${{ env.RELEASE_TITLE }}
+            
+            - **Channel:** `${{ env.CHANNEL }}`
+            - **Version:** `${{ env.RELEASE_VERSION }}`
+            - **Type:** ${{ env.IS_PRERELEASE == 'true' && 'Pre-release (Delta / Testing)' || 'Official Stable Release' }}
+            
+            ### Release Notes:
+            ${{ env.CHANGELOG }}
+            
+            ---
+            ### Included Files:
+            - **Hybrid Bootable ISO:** `NebulaOS-${{ env.RELEASE_VERSION }}-Apollo-x86_64.iso`
+            - **Partial OTA Update Package:** `nebulaos-ota-${{ env.RELEASE_VERSION }}.deb`
+            - **Metadata & Checksum:** `ota.json`, `.sha256`
+            
+            ### How to update on NebulaOS:
+            Apri l'app **Impostazioni** > **Software Updates** e clicca **Check for Updates**, oppure scarica il pacchetto `.deb` allegato.
+          files: |
+            release_assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

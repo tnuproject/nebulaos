@@ -1,0 +1,8 @@
+<svg width="344" height="344" viewBox="0 0 344 344" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="172" cy="172" r="172" fill="#FFB800"/>
+  <!-- Lightbulb body in white -->
+  <path d="M172 68C126.713 68 90 104.713 90 150C90 178.536 104.606 203.659 126.964 218.421C133.568 222.781 138 230.138 138 238.046V246C138 251.523 142.477 256 148 256H196C201.523 256 206 251.523 206 246V238.046C206 230.138 210.432 222.781 217.036 218.421C239.394 203.659 254 178.536 254 150C254 104.713 217.287 68 172 68Z" fill="white"/>
+  <!-- Lightbulb base screw rings -->
+  <rect x="146" y="266" width="52" height="8" rx="4" fill="white"/>
+  <rect x="154" y="280" width="36" height="8" rx="4" fill="white"/>
+</svg>

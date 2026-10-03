@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Camera
+GenericName=Camera & Video Recorder
+Comment=Take photos and record video clips using your web camera
+Exec=/usr/bin/nebula-camera
+Icon=nebula-camera
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;AudioVideo;Video;Recorder;
+Keywords=camera;photo;webcam;video;snapshot;capture;
+StartupNotify=true
+StartupWMClass=org.nebulaos.Camera

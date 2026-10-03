@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NebulaOS Welcome Wizard
+Comment=First-boot post-installation wizard for NebulaOS
+Exec=/usr/bin/nebula-welcome-launcher
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

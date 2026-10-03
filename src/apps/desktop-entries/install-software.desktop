@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Install Software
+GenericName=Software Installer
+Comment=Install Debian software packages
+Exec=/usr/bin/install-software %f
+Icon=system-software-install
+Terminal=false
+Type=Application
+MimeType=application/vnd.debian.binary-package;application/x-deb;application/x-debian-package;
+NoDisplay=true
+StartupNotify=true
+StartupWMClass=install-software
+Categories=System;PackageManager;Utility;

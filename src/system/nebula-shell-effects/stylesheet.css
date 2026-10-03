@@ -1,0 +1,189 @@
+/* NebulaOS Pill Notification Banner — GNOME Adwaita themed */
+.notification-banner {
+    font-family: "Poppins", sans-serif !important;
+    border-radius: 9999px !important;
+    background-color: rgba(36, 36, 36, 0.96) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.50) !important;
+    padding: 14px 32px 14px 18px !important;
+    min-width: 400px !important;
+    margin-right: 24px !important;
+    margin-top: 12px !important;
+    color: #ffffff !important;
+}
+
+.notification-banner:hover {
+    background-color: rgba(46, 46, 46, 0.98) !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+.notification-banner .notification-icon {
+    border-radius: 9999px !important;
+    margin-right: 16px !important;
+    icon-size: 48px !important;
+}
+
+.notification-banner .notification-title {
+    font-family: "Poppins", sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    color: #ffffff !important;
+}
+
+.notification-banner .notification-body {
+    font-family: "Poppins", sans-serif !important;
+    font-weight: 400 !important;
+    font-size: 13px !important;
+    color: rgba(255, 255, 255, 0.80) !important;
+    line-height: 1.4 !important;
+}
+
+.notification-banner .notification-button {
+    border-radius: 9999px !important;
+    background-color: rgba(255, 255, 255, 0.10) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    color: #ffffff !important;
+    font-weight: 500 !important;
+    padding: 6px 18px !important;
+}
+
+.notification-banner .notification-button:hover {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* NebulaOS Dynamic Translucent Topbar */
+#panel {
+    background-color: transparent !important;
+    font-family: "Poppins", sans-serif !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+    border: none !important;
+    transition-duration: 250ms !important;
+}
+
+#panel.panel-opaque,
+#panel.solid {
+    background-color: rgba(0, 0, 0, 0.88) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#panel .panel-button:hover {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+#panel .system-status-icon {
+    icon-size: 16px !important;
+}
+
+/* Floating Dash to Dock - Detached from bottom screen edge & nicely elongated */
+#dashtodockContainer.bottom {
+    margin-bottom: 36px !important;
+    padding-bottom: 0px !important;
+}
+
+#dashtodockContainer.bottom #dash {
+    border-radius: 36px !important;
+    padding: 10px 10px !important;
+    margin-bottom: 0px !important;
+}
+
+#dashtodockContainer.bottom #dash .dash-background {
+    border-radius: 36px !important;
+    padding: 10px 10px !important;
+    margin-bottom: 0px !important;
+}
+
+/* NebulaOS Lockscreen & GDM Login Screen Background with Blurred Wallpaper */
+#lockDialogGroup,
+.login-dialog,
+.unlock-dialog {
+    background-color: #000000 !important;
+    background-image: url("file:///usr/share/backgrounds/nebula/plains-blurred.jpg") !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+    background-position: center !important;
+}
+
+.unlock-dialog-background-box,
+.login-dialog-background-box {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+
+
+/* PetalDrop Quick Settings & Fixed Floating Overlay */
+.petaldrop-overlay {
+    width: 440px !important;
+    background-color: rgba(30, 30, 36, 0.96) !important;
+    border-radius: 24px !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow: 0 16px 56px rgba(0, 0, 0, 0.65) !important;
+    padding: 20px !important;
+    font-family: "Poppins", sans-serif !important;
+}
+
+.petaldrop-title {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+}
+
+.petaldrop-close-btn {
+    border-radius: 9999px !important;
+    padding: 6px !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.petaldrop-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.20) !important;
+    color: #ffffff !important;
+}
+
+.petaldrop-dropzone {
+    border: 2px dashed rgba(255, 255, 255, 0.22) !important;
+    border-radius: 18px !important;
+    padding: 28px 16px !important;
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    margin-top: 14px !important;
+    transition-duration: 200ms !important;
+}
+
+.petaldrop-dropzone:hover {
+    border-color: #3584e4 !important;
+    background-color: rgba(53, 132, 228, 0.08) !important;
+}
+
+.petaldrop-prompt-text {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+    text-align: center !important;
+    margin-top: 8px !important;
+}
+
+.petaldrop-sub-text {
+    font-size: 12px !important;
+    color: rgba(255, 255, 255, 0.60) !important;
+    text-align: center !important;
+    margin-top: 4px !important;
+}
+
+.petaldrop-peer-btn {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    border-radius: 14px !important;
+    padding: 10px 16px !important;
+    color: #ffffff !important;
+    font-weight: 500 !important;
+    margin-top: 6px !important;
+}
+
+.petaldrop-peer-btn:hover {
+    background-color: #3584e4 !important;
+    border-color: #3584e4 !important;
+}
+

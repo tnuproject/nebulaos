@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# NebulaOS Live Session Startup Interceptor
+# Runs via XDG autostart after GNOME session starts.
+# Creates /run/nebula-installer-active FIRST so extension.js can detect it
+# and block Super key, Alt+F4, overview, and dock during installer/recovery.
+
+TRIGGER_FILE="/run/nebula-recovery-trigger"
+UNLOCK_FILE="/run/nebula-desktop-unlocked"
+INSTALLER_ACTIVE_FILE="/run/nebula-installer-active"
+
+is_recovery_requested() {
+    if [ -f "${TRIGGER_FILE}" ] || grep -q "nebula.recovery" /proc/cmdline 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+# Create the installer-active flag IMMEDIATELY so the shell extension
+# sees it and applies kiosk lockdown from the very first poll tick.
+touch "${INSTALLER_ACTIVE_FILE}" 2>/dev/null || true
+
+lock_desktop() {
+    gsettings set org.gnome.mutter overlay-key '' 2>/dev/null || true
+    gsettings set org.gnome.shell.keybindings toggle-overview "['']" 2>/dev/null || true
+    gsettings set org.gnome.shell.keybindings toggle-application-view "['']" 2>/dev/null || true
+    gsettings set org.gnome.desktop.wm.keybindings switch-applications "['']" 2>/dev/null || true
+    gsettings set org.gnome.desktop.wm.keybindings switch-windows "['']" 2>/dev/null || true
+    gsettings set org.gnome.desktop.wm.keybindings close "['']" 2>/dev/null || true
+}
+
+unlock_desktop() {
+    rm -f "${INSTALLER_ACTIVE_FILE}" 2>/dev/null || true
+    touch "${UNLOCK_FILE}" 2>/dev/null || true
+    gsettings reset org.gnome.mutter overlay-key 2>/dev/null || true
+    gsettings reset org.gnome.shell.keybindings toggle-overview 2>/dev/null || true
+    gsettings reset org.gnome.shell.keybindings toggle-application-view 2>/dev/null || true
+    gsettings reset org.gnome.desktop.wm.keybindings switch-applications 2>/dev/null || true
+    gsettings reset org.gnome.desktop.wm.keybindings switch-windows 2>/dev/null || true
+    gsettings reset org.gnome.desktop.wm.keybindings close 2>/dev/null || true
+    # Enable dash-to-dock for the live session "Try NebulaOS" mode
+    gsettings set org.gnome.shell enabled-extensions \
+        "['dash-to-dock@micxgx.gmail.com', 'user-theme@gnome-shell-extensions.gcampax.github.com', 'nebula-shell-effects@nebulaos.org', 'blur-my-shell@aunetx', 'kiwi@kemma', 'battery-indicator-icon@Deminder']" \
+        2>/dev/null || true
+}
+
+# Only lock down if running in live/recovery environment
+if [ -f /cdrom/live/filesystem.squashfs ] || [ -d /run/live ] || [ -f "${TRIGGER_FILE}" ]; then
+    lock_desktop
+fi
+
+if is_recovery_requested; then
+    echo "[nebula-session-init] Launching NebulaOS Recovery in kiosk mode..."
+    /usr/bin/nebula-recovery
+    unlock_desktop
+else
+    echo "[nebula-session-init] Launching NebulaOS Setup in kiosk mode..."
+    /usr/bin/install-nebula
+    unlock_desktop
+fi

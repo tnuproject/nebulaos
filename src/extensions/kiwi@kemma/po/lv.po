@@ -1,0 +1,910 @@
+# Latvian translation for Kiwi Menu
+# Copyright (C) 2025 Arnis Kemlers
+# This file is distributed under the same license as the kiwimenu package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Kiwi is not Apple\n"
+"Report-Msgid-Bugs-To: https://github.com/kem-a/kiwi-kemma/issues\n"
+"POT-Creation-Date: 2026-08-31 15:09+0300\n"
+"PO-Revision-Date: 2026-08-21 20:00+0300\n"
+"Last-Translator: \n"
+"Language-Team: Latvian\n"
+"Language: lv\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: apps/downloadsStack.js:457
+msgid "Open in Files"
+msgstr "Atvērt lietotnē Datnes"
+
+#: apps/downloadsStack.js:459
+#, javascript-format
+msgid "%d More in Files"
+msgstr "Vēl %d lietotnē Datnes"
+
+#: apps/downloadsStack.js:461
+msgid "Empty"
+msgstr "Tukšs"
+
+#: apps/downloadsStack.js:795
+msgid "Downloads"
+msgstr "Lejupielādes"
+
+#: apps/launchpadApp.js:298
+msgid "Launchpad"
+msgstr "Launchpad"
+
+#: apps/launchpadApp.js:299
+msgid "Open Application Overview"
+msgstr "Atvērt lietotņu pārskatu"
+
+#: apps/quickSettingsMedia.js:414
+msgid "Media"
+msgstr "Multivide"
+
+#: apps/quickSettingsNotifications.js:97
+msgid "Disable Do Not Disturb"
+msgstr "Izslēgt Netraucēt"
+
+#: apps/quickSettingsNotifications.js:97 apps/quickSettingsNotifications.js:152
+msgid "Enable Do Not Disturb"
+msgstr "Ieslēgt Netraucēt"
+
+#: apps/quickSettingsNotifications.js:148
+msgid "Do Not Disturb"
+msgstr "Netraucēt"
+
+#: apps/quickSettingsNotifications.js:548
+msgid "Notifications"
+msgstr "Paziņojumi"
+
+#: apps/quickSettingsNotifications.js:558
+msgid "Clear"
+msgstr "Notīrīt"
+
+#: apps/quickSettingsNotifications.js:563
+msgid "Clear all notifications"
+msgstr "Notīrīt visus paziņojumus"
+
+#: apps/quickSettingsNotifications.js:770
+msgid "Do Not Disturb Indicator"
+msgstr "Netraucēt indikators"
+
+#: apps/windowTiling.js:324
+msgid "Move & Resize"
+msgstr "Pārvietot un mainīt izmēru"
+
+#: apps/windowTiling.js:325
+msgid "Left"
+msgstr "Pa kreisi"
+
+#: apps/windowTiling.js:326
+msgid "Right"
+msgstr "Pa labi"
+
+#: apps/windowTiling.js:327
+msgid "Top"
+msgstr "Augšā"
+
+#: apps/windowTiling.js:328
+msgid "Bottom"
+msgstr "Apakšā"
+
+#: apps/windowTiling.js:330
+msgid "Fill & Arrange"
+msgstr "Aizpildīt un izkārtot"
+
+#: apps/windowTiling.js:331
+msgid "Fill"
+msgstr "Aizpildīt"
+
+#: apps/windowTiling.js:338
+msgid "Left & Right"
+msgstr "Kreisā un labā"
+
+#: apps/windowTiling.js:341
+msgid "Right & Left"
+msgstr "Labā un kreisā"
+
+#: apps/windowTiling.js:344
+msgid "Quarters"
+msgstr "Ceturtdaļas"
+
+#: apps/windowTitle.js:281
+msgid "Leave Fullscreen"
+msgstr "Iziet no pilnekrāna"
+
+#: apps/windowTitle.js:281
+msgid "Fullscreen"
+msgstr "Pilnekrāns"
+
+#: apps/windowTitle.js:289
+msgid "Restore Window"
+msgstr "Atjaunot logu"
+
+#: apps/windowTitle.js:295
+msgid "Always on Top"
+msgstr "Vienmēr virspusē"
+
+#: prefs.js:83
+msgid "Kiwi (is not Apple)"
+msgstr "Kiwi (is not Apple)"
+
+#: prefs.js:110
+msgid "About"
+msgstr "Par"
+
+#: prefs.js:169 prefs.js:183
+msgid "Unknown"
+msgstr "Nezināms"
+
+#: prefs.js:176
+msgid "Change log"
+msgstr "Izmaiņu žurnāls"
+
+#: prefs.js:217
+msgid "Website"
+msgstr "Tīmekļa vietne"
+
+#: prefs.js:221
+msgid "Report an Issue"
+msgstr "Ziņot par problēmu"
+
+#: prefs.js:226
+msgid "Credits"
+msgstr "Atzinības"
+
+#: prefs.js:229 prefs.js:244
+msgid "Legal"
+msgstr "Juridisks"
+
+#: prefs.js:252
+msgid "License"
+msgstr "Licence"
+
+#: prefs.js:253
+msgid "Kiwi is free and open source software"
+msgstr "Kiwi ir bezmaksas atvērtā koda programmatūra"
+
+#: prefs.js:258
+msgid "GNU General Public License v3.0"
+msgstr "GNU vispārējā publiskā licence v3.0"
+
+#: prefs.js:260
+msgid "View the full license text on GitHub"
+msgstr "Skatīt pilnu licences tekstu GitHub"
+
+#: prefs.js:267 prefs.js:268
+msgid "Copyright"
+msgstr "Autortiesības"
+
+#: prefs.js:268
+msgid ""
+"This program is free software: you can redistribute it and/or modify it "
+"under the terms of the GNU General Public License as published by the Free "
+"Software Foundation, either version 3 of the License, or (at your option) "
+"any later version."
+msgstr ""
+"Šī programma ir brīva programmatūra; jūs varat to izplatīt un/vai modificēt "
+"saskaņā ar GNU vispārējās publiskās licences noteikumiem, ko publicējusi "
+"Free Software Foundation, vai nu licences versiju 3, vai (pēc jūsu izvēles) "
+"jebkuru vēlākas versijas."
+
+#: prefs.js:322
+msgid "Become a sponsor on GitHub"
+msgstr "Kļūsti par sponsoru GitHub"
+
+#: prefs.js:335
+msgid "Support Me ♡"
+msgstr "Atbalsti mani ♡"
+
+#: prefs.js:361
+msgid "Panel"
+msgstr "Panelis"
+
+#: prefs.js:367 prefs.js:380
+msgid "Panel Transparency"
+msgstr "Paneļa caurspīdīgums"
+
+#: prefs.js:368
+msgid "Configure panel transparency and appearance"
+msgstr "Konfigurēt paneļa caurspīdīgumu un izskatu"
+
+#: prefs.js:381
+msgid "Make the top panel transparent"
+msgstr "Padarīt augšējo paneli caurspīdīgu"
+
+#: prefs.js:388
+msgid "Transparency Level"
+msgstr "Caurspīdīguma līmenis"
+
+#: prefs.js:389
+msgid "Set panel transparency (0-100)"
+msgstr "Iestatīt paneļa caurspīdīgumu (0–100)"
+
+#: prefs.js:403
+msgid "Opaque When Window Touches"
+msgstr "Kļūst necaurspīdīgs, kad pieskaras logs"
+
+#: prefs.js:404
+msgid "Make panel opaque when a window touches it"
+msgstr "Padarīt paneli necaurspīdīgu, kad to aizskar logs"
+
+#: prefs.js:412
+msgid "Panel Blur"
+msgstr "Paneļa izpludināšana"
+
+#: prefs.js:413
+msgid "Blur the background behind the panel"
+msgstr "Izpludināt fonu aiz paneļa"
+
+#: prefs.js:421
+msgid "Panel Color Fix"
+msgstr "Paneļa krāsas labojums"
+
+#: prefs.js:422
+msgid "Fix white panel on some themes (e.g., Ubuntu Yaru)"
+msgstr "Novērst balto paneli dažās tēmās (piem., Ubuntu Yaru)"
+
+#: prefs.js:429
+msgid "Invert Tray Icons on Light Wallpapers"
+msgstr "Invertēt paplātes ikonas uz gaišām fona tapetēm"
+
+#: prefs.js:430
+msgid ""
+"Darken white monochrome tray icons when the panel adapts to a light "
+"wallpaper. Colored icons are left untouched"
+msgstr ""
+"Padarīt tumšākas baltās vienkrāsainās paplātes ikonas, kad panelis "
+"pielāgojas gaišai fona tapetei. Krāsainās ikonas netiek mainītas"
+
+#: prefs.js:463
+msgid "Panel Items"
+msgstr "Paneļa elementi"
+
+#: prefs.js:464
+msgid "Choose what the top panel and its menus show"
+msgstr "Izvēlieties, ko rāda augšējais panelis un tā izvēlnes"
+
+#: prefs.js:471
+msgid "Show Window Title"
+msgstr "Rādīt loga virsrakstu"
+
+#: prefs.js:472
+msgid "Display current window title in the top panel"
+msgstr "Rādīt pašreizējā loga virsrakstu augšējā panelī"
+
+#: prefs.js:481
+msgid "Hide App Icon"
+msgstr "Slēpt lietotnes ikonu"
+
+#: prefs.js:482
+msgid "Do not show the application icon next to the window title"
+msgstr "Nerādīt lietotnes ikonu blakus loga virsrakstam"
+
+#: prefs.js:489
+msgid "Disable Window Tiling"
+msgstr "Atspējot logu izkārtošanu"
+
+#: prefs.js:490
+msgid ""
+"Drop the tiling layouts from the window title menu, and stop restoring tiled "
+"windows when their titlebar is dragged"
+msgstr ""
+"Noņemt izkārtojumus no loga virsraksta izvēlnes un vairs neatjaunot "
+"izkārtotos logus, kad tiek vilkta to virsraksta josla"
+
+#: prefs.js:510
+msgid "Show Panel in Fullscreen on Hover"
+msgstr "Rādīt paneli pilnekrānā, novietojot kursoru"
+
+#: prefs.js:510
+msgid ""
+"Show panel when mouse is near top edge in fullscreen. Bugged for GTK4 apps."
+msgstr ""
+"Rādīt paneli, kad pele pilnekrāna režīmā ir pie augšējās malas. GTK4 "
+"lietotnēm ir zināmas problēmas."
+
+#: prefs.js:518
+msgid "Move Calendar to Right"
+msgstr "Pārvietot kalendāru pa labi"
+
+#: prefs.js:519
+msgid "Move calendar to right side and hide notifications"
+msgstr "Pārvietot kalendāru uz labo pusi un paslēpt paziņojumus"
+
+#: prefs.js:528
+msgid "Keep GNOME Notification Panel"
+msgstr "Saglabāt GNOME paziņojumu paneli"
+
+#: prefs.js:529
+msgid "Don't split notification and calendar layout"
+msgstr "Neatdalīt paziņojumu un kalendāra izkārtojumu"
+
+#: prefs.js:536
+msgid "Indicator Style"
+msgstr "Indikatora stils"
+
+#: prefs.js:537
+msgid "Notification dot recolor"
+msgstr "Paziņojuma punkta krāsa"
+
+#: prefs.js:540 prefs.js:826
+msgid "Default"
+msgstr "Noklusējuma"
+
+#: prefs.js:540
+msgid "Accent"
+msgstr "Akcentkrāsa"
+
+#: prefs.js:540
+msgid "Symbolic"
+msgstr "Simbolisks"
+
+#: prefs.js:547
+msgid "Battery Percentage"
+msgstr "Akumulatora procents"
+
+#: prefs.js:559
+msgid ""
+"Unavailable while GNOME Settings shows the battery percentage in the top bar"
+msgstr ""
+"Nav pieejams, kamēr GNOME iestatījumi rāda baterijas procentus augšējā panelī"
+
+#: prefs.js:560
+msgid "Show battery percentage in the top bar when below 20%"
+msgstr "Rādīt akumulatora procentu augšējā joslā, kad tas ir zem 20 %"
+
+#: prefs.js:566
+msgid "Caps Lock and Num Lock"
+msgstr "Caps Lock un Num Lock"
+
+#: prefs.js:566
+msgid "Show Caps Lock and Num Lock icon"
+msgstr "Rādīt Caps Lock un Num Lock ikonu"
+
+#: prefs.js:567
+msgid "Custom Do Not Disturb Button"
+msgstr "Pielāgota poga Netraucēt"
+
+#: prefs.js:567
+msgid ""
+"Replace the system Do Not Disturb button with Kiwi's custom implementation"
+msgstr "Aizstāj sistēmas pogu Netraucēt ar Kiwi pielāgoto variantu"
+
+#: prefs.js:568
+msgid "Hide Activities Button"
+msgstr "Paslēpt pogu “Darbības”"
+
+#: prefs.js:568
+msgid "Hide the Activities button in the top panel"
+msgstr "Paslēpt augšējā panelī esošo pogu “Darbības”"
+
+#: prefs.js:569
+msgid "Add Username"
+msgstr "Pievienot lietotājvārdu"
+
+#: prefs.js:569
+msgid "Add username to the quick menu"
+msgstr "Pievienot lietotājvārdu ātrajai izvēlnei"
+
+#: prefs.js:573 prefs.js:771
+msgid "Styling"
+msgstr "Noformējums"
+
+#: prefs.js:574
+msgid ""
+"Restyle stock GNOME Shell elements and GTK apps. Log out and back in for "
+"changes to take effect"
+msgstr ""
+"Pārveidot GNOME Shell standarta elementu un GTK lietotņu noformējumu. Lai "
+"izmaiņas stātos spēkā, izejiet un pieteicieties atkārtoti"
+
+#: prefs.js:579
+msgid "Panel Styling"
+msgstr "Paneļa noformējums"
+
+#: prefs.js:579
+msgid ""
+"Tighter button spacing, bold titles, smaller status icons, no dropdown "
+"arrows and a transparent panel in the overview"
+msgstr ""
+"Blīvākas atstarpes starp pogām, treknraksta virsraksti, mazākas statusa "
+"ikonas, bez izkrītošo izvēlņu bultām un caurspīdīgs panelis pārskatā"
+
+#: prefs.js:580
+msgid "Menu and App Styling"
+msgstr "Izvēlņu un lietotņu noformējums"
+
+#: prefs.js:580
+msgid ""
+"Narrower shell menu items with accent-colored hover and selection, plus the "
+"GTK app fixes"
+msgstr ""
+"Šaurāki Shell izvēlņu elementi ar akcenta krāsu, novietojot kursoru un "
+"atlasot, kā arī GTK lietotņu labojumi"
+
+#: prefs.js:586
+msgid "Style Keyboard Indicator"
+msgstr "Noformēt tastatūras indikatoru"
+
+#: prefs.js:587
+msgid ""
+"Slightly style keyboard/input source indicator by converting to uppercase "
+"and adding border"
+msgstr ""
+"Nedaudz noformēt tastatūras/ievades avota indikatoru, pārveidojot uz "
+"lielajiem burtiem un pievienojot apmali"
+
+#: prefs.js:594
+msgid "Hide keyboard indicator"
+msgstr "Paslēpt tastatūras indikatoru"
+
+#: prefs.js:595
+msgid "Completely hide the indicator from the panel"
+msgstr "Pilnībā paslēpt indikatoru no paneļa"
+
+#: prefs.js:623
+msgid "Dock"
+msgstr "Doks"
+
+#: prefs.js:629
+msgid "Dock Items"
+msgstr "Doka elementi"
+
+#: prefs.js:630
+msgid "Add extra items to Dash-to-Dock"
+msgstr "Pievienot papildu elementus Dash-to-Dock"
+
+#: prefs.js:635
+msgid "Minimize Windows to Dock"
+msgstr "Minimizēt logus dokā"
+
+#: prefs.js:635
+msgid ""
+"Park minimized windows as thumbnails in Dash-to-Dock, after the apps and "
+"before the trash"
+msgstr ""
+"Novietot minimizētos logus kā sīktēlus Dash-to-Dock — pēc lietotnēm un pirms "
+"miskastes"
+
+#: prefs.js:639
+msgid "Downloads Folder in Dock"
+msgstr "Lejupielāžu mape dokā"
+
+#: prefs.js:640
+msgid ""
+"Add a Downloads folder before the trash that fans its newest files out over "
+"the desktop"
+msgstr ""
+"Pievienot lejupielāžu mapi pirms miskastes, kas izklāj jaunākās datnes uz "
+"darbvirsmas"
+
+#: prefs.js:648
+msgid "Stack Behind Folder"
+msgstr "Kraut aiz mapes"
+
+#: prefs.js:649
+msgid ""
+"Show the newest files sticking out of the folder icon instead of piled on "
+"top of it"
+msgstr ""
+"Rādīt jaunākās datnes izlīdušas aiz mapes ikonas, nevis sakrautas uz tās"
+
+#: prefs.js:667
+msgid "Launchpad Application"
+msgstr "Launchpad lietotne"
+
+#: prefs.js:668
+msgid ""
+"Add custom Launchpad icon to dock that opens application overview. "
+"Recommended to hide default app launcher."
+msgstr ""
+"Pievienot dokam pielāgotu Launchpad ikonu, kas atver lietotņu pārskatu. "
+"Ieteicams paslēpt noklusējuma palaidēju."
+
+#: prefs.js:678
+msgid "Custom Icon"
+msgstr "Pielāgota ikona"
+
+#: prefs.js:681 prefs.js:766
+msgid "Using default icon"
+msgstr "Tiek izmantota noklusējuma ikona"
+
+#: prefs.js:689
+msgid "Reset to default icon"
+msgstr "Atjaunot noklusējuma ikonu"
+
+#: prefs.js:700
+msgid "Browse for icon"
+msgstr "Pārlūkot ikonu"
+
+#: prefs.js:705
+msgid "Select Launchpad Icon"
+msgstr "Izvēlēties Launchpad ikonu"
+
+#: prefs.js:709
+msgid "Images (PNG, SVG)"
+msgstr "Attēli (PNG, SVG)"
+
+#: prefs.js:737
+msgid "Icon Too Large"
+msgstr "Ikona ir pārāk liela"
+
+#: prefs.js:738
+msgid ""
+"The selected image exceeds 512×512 pixels. Please choose a smaller image."
+msgstr ""
+"Izvēlētais attēls pārsniedz 512×512 pikseļus. Lūdzu, izvēlieties mazāku "
+"attēlu."
+
+#: prefs.js:740
+msgid "OK"
+msgstr "Labi"
+
+#: prefs.js:776
+msgid "Dock Styling"
+msgstr "Doka noformējums"
+
+#: prefs.js:776
+msgid ""
+"Tighten icon spacing, drop the icon highlight and darken icons while pressed"
+msgstr ""
+"Samazināt atstarpes starp ikonām, noņemt ikonu izcēlumu un padarīt ikonas "
+"tumšākas, kad tās tiek nospiestas"
+
+#: prefs.js:777
+msgid "Dock Blur"
+msgstr "Doka izpludināšana"
+
+#: prefs.js:777
+msgid ""
+"Blur the background behind Dash-to-Dock. Recommended fixed dock opacity 10% "
+"- 30%, min 1%."
+msgstr ""
+"Izpludināt fonu aiz Dash-to-Dock. Ieteicamā fiksētā doka necaurspīdība 10%–"
+"30%, vismaz 1%."
+
+#: prefs.js:778
+msgid "Adaptive Dock Colors"
+msgstr "Adaptīvas doka krāsas"
+
+#: prefs.js:778
+msgid ""
+"Flip the running indicators and separators to suit whatever is behind the "
+"dock, wallpaper or window"
+msgstr ""
+"Pielāgot darbojošos lietotņu indikatorus un atdalītājus tam, kas atrodas aiz "
+"doka – fona tapetei vai logam"
+
+#: prefs.js:785
+msgid "Buttons"
+msgstr "Pogas"
+
+#: prefs.js:791
+msgid "Window Control Button Style"
+msgstr "Logu vadības pogu stils"
+
+#: prefs.js:792
+msgid ""
+"Choose the window control button style. Log out to apply it across all apps."
+msgstr ""
+"Izvēlieties logu vadības pogu stilu. Lai piemērotu visām lietotnēm, "
+"izrakstieties."
+
+#: prefs.js:800
+msgid "Enable macOS Window Buttons"
+msgstr "Ieslēgt macOS logu pogas"
+
+#: prefs.js:801
+msgid "Replace window control buttons in application windows with macOS style"
+msgstr "Aizstāt logu vadības pogas lietotnēs ar macOS stilu"
+
+#: prefs.js:822
+msgid "Button Type"
+msgstr "Pogas tips"
+
+#: prefs.js:823
+msgid "Choose the button icon set"
+msgstr "Izvēlieties pogu ikonu komplektu"
+
+#: prefs.js:826
+msgid "Alternative"
+msgstr "Alternatīva"
+
+#: prefs.js:832
+msgid "Button Size"
+msgstr "Pogas izmērs"
+
+#: prefs.js:833
+msgid "Choose button size"
+msgstr "Izvēlēties pogas izmēru"
+
+#: prefs.js:836
+msgid "Small"
+msgstr "Maza"
+
+#: prefs.js:836
+msgid "Normal"
+msgstr "Normāla"
+
+#: prefs.js:842
+msgid "Firefox Styling"
+msgstr "Firefox noformējums"
+
+#: prefs.js:843
+msgid ""
+"Apply macOS window control styling for Firefox. Recommended to use with "
+"vertical tabs."
+msgstr ""
+"Piemērot macOS logu vadības stilu pārlūkā Firefox. Ieteicams lietot kopā ar "
+"vertikālām cilnēm."
+
+#: prefs.js:851
+msgid "Thunderbird Styling"
+msgstr "Thunderbird noformējums"
+
+#: prefs.js:852
+msgid "Apply macOS window control styling for Thunderbird."
+msgstr "Pielietot macOS logu vadības stilu Thunderbird programmā."
+
+#: prefs.js:876
+msgid "Show Window Controls on Panel"
+msgstr "Rādīt logu vadību uz paneļa"
+
+#: prefs.js:877
+msgid ""
+"Display close, minimize, maximize buttons in the top panel when window is "
+"maximized"
+msgstr ""
+"Rādīt aizvēršanas, minimizēšanas un maksimizēšanas pogas augšējā panelī, kad "
+"logs ir maksimizēts"
+
+#: prefs.js:891
+msgid "Only when Fullscreen"
+msgstr "Tikai pilnekrānā"
+
+#: prefs.js:892
+msgid ""
+"Hide titlebars and show panel controls only for fullscreen windows, not "
+"maximized"
+msgstr ""
+"Slēpt virsraksta joslas un rādīt paneļa vadīklas tikai pilnekrāna logiem, "
+"nevis maksimizētiem"
+
+#: prefs.js:901
+msgid "Options"
+msgstr "Opcijas"
+
+#: prefs.js:907
+msgid "Kiwi"
+msgstr "Kiwi"
+
+#: prefs.js:908
+msgid ""
+"Kiwi is not like Apple, it's free open source project that brings macOS-like "
+"feel for GNOME"
+msgstr ""
+"Kiwi nav Apple; tas ir brīvs atvērtā koda projekts, kas piešķir GNOME videi "
+"macOS līdzīgu sajūtu"
+
+#: prefs.js:913
+msgid "Overview Wallpaper Blur"
+msgstr "Pārskata fona izpludināšana"
+
+#: prefs.js:913
+msgid "Use blurred current wallpaper as overview background"
+msgstr "Izmantot izpludinātu pašreizējo fona tapeti kā pārskata fonu"
+
+#: prefs.js:914
+msgid "Skip to Desktop"
+msgstr "Pāriet tieši uz darbvirsmu"
+
+#: prefs.js:914
+msgid "Do not show the overview when logging in. Animation is still visible"
+msgstr "Piesakoties nerādīt pārskatu. Animācija joprojām redzama."
+
+#: prefs.js:915
+msgid "Hide Minimized Windows"
+msgstr "Paslēpt minimizētos logus"
+
+#: prefs.js:915
+msgid "Hide minimized windows in the overview"
+msgstr "Pārskatā paslēpt minimizētos logus"
+
+#: prefs.js:916
+msgid "Move Window to New Workspace"
+msgstr "Pārvietot logu uz jaunu darbvietu"
+
+#: prefs.js:916
+msgid "Move fullscreen window to a new workspace"
+msgstr "Pārvietot pilnekrāna logu uz jaunu darbvietu"
+
+#: prefs.js:917
+msgid "Reduce App Animations"
+msgstr "Samazināt lietotņu animācijas"
+
+#: prefs.js:917
+msgid "Mimic macOS window opening and closing with a subtle scale and fade"
+msgstr ""
+"Atdarināt macOS logu atvēršanu un aizvēršanu ar smalku mēroga maiņu un "
+"izgaišanu"
+
+#: prefs.js:918
+msgid "Transparent Move"
+msgstr "Caurspīdīga pārvietošana"
+
+#: prefs.js:918
+msgid "Move window with transparency"
+msgstr "Pārvietot logu ar caurspīdīgumu"
+
+#: prefs.js:925
+msgid "Advanced"
+msgstr "Papildu"
+
+#: prefs.js:955
+msgid "Titlebuttons Hover Effect for GTK3 apps"
+msgstr "GTK3 lietotņu logu pogu hover efekts"
+
+#: prefs.js:968
+msgid ""
+"The titlebuttons hover module provides macOS-like hover effects for window "
+"controls in GTK3 applications. GTK3 apps cannot natively show hover effects "
+"on all three window controls simultaneously, requiring this custom library "
+"to achieve the desired behavior.\n"
+"\n"
+"This binary code cannot be distributed through the GNOME Extensions platform "
+"due to security policies regarding native libraries, but manual installation "
+"is possible."
+msgstr ""
+"Logu pogu hover modulis nodrošina macOS līdzīgus efektus GTK3 lietotņu logu "
+"vadības pogām. GTK3 lietotnes nevar vienlaikus rādīt hover efektus visām "
+"trim pogām, tādēļ vajadzīgajai uzvedībai nepieciešama šī bibliotēka.\n"
+"\n"
+"Šo bināro kodu nevar izplatīt caur GNOME paplašinājumu platformu vietējo "
+"bibliotēku drošības politikas dēļ, taču manuāla instalēšana ir iespējama."
+
+#: prefs.js:984
+msgid "Installation Guide on GitHub"
+msgstr "Instalēšanas rokasgrāmata GitHub"
+
+#: prefs.js:986
+msgid "Open the advanced module build instructions"
+msgstr "Atvērt paplašinātā moduļa būvēšanas norādījumus"
+
+#: prefs.js:992
+msgid "More of my work..."
+msgstr "Vairāk manu darbu…"
+
+#: prefs.js:996
+msgid "Kiwi Menu"
+msgstr "Kiwi Menu"
+
+#: prefs.js:996
+msgid "MacOS style menu for GNOME"
+msgstr "macOS stila izvēlne GNOME videi"
+
+#: prefs.js:997
+msgid "AppManager"
+msgstr "AppManager"
+
+#: prefs.js:997
+msgid "MacOS style AppImage installer and management application"
+msgstr "MacOS stila AppImage instalēšanas un pārvaldības lietojumprogramma"
+
+#: prefs.js:998
+msgid "Catalina Reloaded Icon Pack"
+msgstr "Catalina Reloaded Icon Pack"
+
+#: prefs.js:998
+msgid "macOS Tahoe icon theme for Linux"
+msgstr "macOS Tahoe ikonu tēma Linux sistēmai"
+
+#: prefs.js:999
+msgid "GDM Wallpaper"
+msgstr "GDM Wallpaper"
+
+#: prefs.js:999
+msgid "Set custom GDM login screen wallpaper"
+msgstr "Iestatīt pielāgotu GDM pieteikšanās ekrāna fona attēlu"
+
+#: prefs.js:1011
+msgid "Other Recommended Extensions"
+msgstr "Citi ieteiktie paplašinājumi"
+
+#: prefs.js:1012
+msgid "Extensions that are compatible with Kiwi"
+msgstr "Paplašinājumi, kas ir savietojami ar Kiwi"
+
+#: prefs.js:1036 prefs.js:1050
+msgid "Restore Defaults"
+msgstr "Atjaunot noklusējumus"
+
+#: prefs.js:1040
+msgid "Reset every Kiwi setting to its default value"
+msgstr "Atiestatīt katru Kiwi iestatījumu uz noklusējuma vērtību"
+
+#: prefs.js:1046
+msgid "Restore Default Settings?"
+msgstr "Atjaunot noklusējuma iestatījumus?"
+
+#: prefs.js:1047
+msgid ""
+"Every Kiwi setting will be reset to its default value. This cannot be undone."
+msgstr ""
+"Katrs Kiwi iestatījums tiks atiestatīts uz noklusējuma vērtību. Šo darbību "
+"nevar atsaukt."
+
+#: prefs.js:1049
+msgid "Cancel"
+msgstr "Atcelt"
+
+#~ msgid "Unknown artist"
+#~ msgstr "Nezināms izpildītājs"
+
+#~ msgid "Unknown title"
+#~ msgstr "Nezināms nosaukums"
+
+#~ msgid ""
+#~ "ImageMagick not installed (install package \"imagemagick\" to enable)"
+#~ msgstr ""
+#~ "ImageMagick nav uzstādīts (lai ieslēgtu, instalējiet pakotni "
+#~ "\"imagemagick\")"
+
+#~ msgid "Kiwi is not Apple"
+#~ msgstr "Kiwi is not Apple"
+
+#~ msgid "Kiwi is not Apple is free and open source software"
+#~ msgstr "Kiwi is not Apple ir brīva un atvērtā koda programmatūra"
+
+#~ msgid "Sponsor Me ♡"
+#~ msgstr "Atbalsti mani ♡"
+
+#~ msgid ""
+#~ "Use blurred current wallpaper as overview background (requires "
+#~ "ImageMagick)"
+#~ msgstr ""
+#~ "Izmantot izpludinātu pašreizējo fonu pārskata fonā (nepieciešams "
+#~ "ImageMagick)"
+
+#~ msgid "Extras"
+#~ msgstr "Papildiespējas"
+
+#~ msgid "Extra Features"
+#~ msgstr "Papildu funkcijas"
+
+#~ msgid "Additional customization options and utilities"
+#~ msgstr "Papildu pielāgošanas iespējas un rīki"
+
+#~ msgid "Even more..."
+#~ msgstr "Vēl vairāk…"
+
+#~ msgid ""
+#~ "Copyright © 2025 Arnis Kemlers\n"
+#~ "\n"
+#~ "This program is free software: you can redistribute it and/or modify it "
+#~ "under the terms of the GNU General Public License as published by the "
+#~ "Free Software Foundation, either version 3 of the License, or (at your "
+#~ "option) any later version."
+#~ msgstr ""
+#~ "Autortiesības © 2025 Arnis Kemlers\n"
+#~ "\n"
+#~ "Šī programma ir brīva programmatūra; jūs varat to izplatīt un/vai "
+#~ "modificēt saskaņā ar GNU vispārējās publiskās licences noteikumiem, ko "
+#~ "publicējusi Free Software Foundation, vai nu licences versiju 3, vai (pēc "
+#~ "jūsu izvēles) jebkuru vēlākas versijas."
+
+#~ msgid "Support the project"
+#~ msgstr "Atbalstīt projektu"
+
+#~ msgid "Buy Me a Coffee"
+#~ msgstr "Uzsauc man kafiju"
+
+#~ msgid "Show window control buttons in application windows"
+#~ msgstr "Rādīt logu vadības pogas lietotņu logos"
+
+#~ msgid ""
+#~ "Display window control buttons in the top panel when window is maximized"
+#~ msgstr "Rādīt vadības pogas augšējā panelī, kad logs ir maksimizēts"

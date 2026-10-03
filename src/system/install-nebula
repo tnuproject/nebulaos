@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# nebula-setup launcher — NebulaOS Custom Installer
+set -e
+
+export GDK_SCALE="${GDK_SCALE:-1}"
+
+# Ensure root can connect to user's display
+if command -v xhost >/dev/null 2>&1; then
+    xhost +local: 2>/dev/null || xhost +si:localuser:root 2>/dev/null || xhost + 2>/dev/null || true
+fi
+
+USER_RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [ -d "${USER_RUNTIME}" ]; then
+    chmod 755 "${USER_RUNTIME}" 2>/dev/null || true
+    chmod 666 "${USER_RUNTIME}/wayland-*" 2>/dev/null || true
+fi
+
+INSTALLER_DIR="/usr/share/nebula-setup"
+INSTALLER_SCRIPT="${INSTALLER_DIR}/nebula-setup.py"
+
+if [ "$(id -u)" -eq 0 ]; then
+    exec python3 "${INSTALLER_SCRIPT}" "$@"
+elif command -v sudo >/dev/null 2>&1; then
+    exec sudo -E env DISPLAY="${DISPLAY:-:0}" \
+        WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+        XDG_RUNTIME_DIR="${USER_RUNTIME}" \
+        XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" \
+        python3 "${INSTALLER_SCRIPT}" "$@"
+else
+    exec pkexec env DISPLAY="${DISPLAY:-:0}" \
+        WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+        XDG_RUNTIME_DIR="${USER_RUNTIME}" \
+        python3 "${INSTALLER_SCRIPT}" "$@"
+fi

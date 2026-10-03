@@ -1,0 +1,12 @@
+[Unit]
+Description=NebulaOS Automatic Picture Organizer
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/nebulaos/nebula-picture-organizer.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
