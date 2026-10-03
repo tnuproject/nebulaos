@@ -23,3 +23,5 @@ local.properties
 Thumbs.db
 desktop.ini
 
+# Website
+website/
