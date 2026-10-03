@@ -205,12 +205,30 @@ Type=Scalable
 
 def create_firefox_squircle_svg() -> str:
     """
-    Extract Firefox logo paths and gradients from Hatter's firefox.svg
+    Extract Firefox logo paths and gradients from Hatter's firefox SVG
     and composite them centered over the 344x344 white squircle.
+    Searches a priority list of candidate filenames (firefox-esr is the one
+    actually installed on the ISO; plain 'firefox.svg' doesn't exist in Hatter).
     """
-    hatter_firefox = HATTER_DIR / "firefox.svg"
-    if not hatter_firefox.exists():
-        raise FileNotFoundError(f"Missing {hatter_firefox}")
+    # Priority order: prefer the ESR variant that matches what's installed on the ISO
+    candidates = [
+        "firefox-esr.svg",
+        "Firefox.svg",
+        "firefox-icon.svg",
+        "mozilla-firefox.svg",
+        "org.mozilla.firefox.svg",
+        "firefox-bin.svg",
+    ]
+    hatter_firefox = None
+    for name in candidates:
+        candidate = HATTER_DIR / name
+        if candidate.exists():
+            hatter_firefox = candidate
+            break
+    if hatter_firefox is None:
+        raise FileNotFoundError(
+            f"No Firefox SVG found in {HATTER_DIR}. Tried: {', '.join(candidates)}"
+        )
 
     with open(hatter_firefox, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
@@ -241,10 +259,19 @@ def create_firefox_squircle_svg() -> str:
 def create_vlc_squircle_svg() -> str:
     """
     Composite VLC cone logo onto 344x344 white squircle.
+    Searches a priority list because Hatter uses mixed case on Linux (case-sensitive FS).
     """
-    hatter_vlc = HATTER_DIR / "vlc.svg"
-    if not hatter_vlc.exists():
-        raise FileNotFoundError(f"Missing {hatter_vlc}")
+    candidates = ["vlc.svg", "Vlc.svg", "vlc-kb.svg", "org.videolan.VLC.svg"]
+    hatter_vlc = None
+    for name in candidates:
+        candidate = HATTER_DIR / name
+        if candidate.exists():
+            hatter_vlc = candidate
+            break
+    if hatter_vlc is None:
+        raise FileNotFoundError(
+            f"No VLC SVG found in {HATTER_DIR}. Tried: {', '.join(candidates)}"
+        )
 
     with open(hatter_vlc, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
