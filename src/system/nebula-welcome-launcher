@@ -11,6 +11,20 @@ if [ -f /run/live/medium/live/filesystem.squashfs ] || \
     exit 0
 fi
 
+# First boot after OTA update notification (never runs on live media or clean ISO install)
+if [ -f /var/lib/nebulaos/ota_update_pending ]; then
+    OTA_VER="$(cat /var/lib/nebulaos/ota_update_pending 2>/dev/null || echo "26.0")"
+    rm -f /var/lib/nebulaos/ota_update_pending 2>/dev/null || true
+    mkdir -p "$HOME/.config/nebula" 2>/dev/null || true
+    echo "${OTA_VER}" > "$HOME/.config/nebula/ota_update_completed" 2>/dev/null || true
+    (
+        sleep 4
+        notify-send -u normal -i software-update-available-symbolic \
+            "Welcome to NebulaOS ${OTA_VER}" \
+            "Your system is currently optimizing after the update, please wait around 2-5 minutes before using your device heavily"
+    ) &
+fi
+
 # Do not run if wizard was already completed
 if [ -f "$HOME/.config/nebula/postinstall-wizard-completed" ]; then
     touch /run/nebula-desktop-unlocked 2>/dev/null || true

@@ -35,6 +35,8 @@ mirror_lock = threading.Lock()
 mirror_condition = threading.Condition(mirror_lock)
 latest_mirror_frame = None
 mirror_active = False
+mirror_state = "idle"  # idle, requesting, approved, denied, streaming, stopped, error
+mirror_error = None
 mirror_client_proc = None
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -196,6 +198,411 @@ def get_picture_by_id(file_id):
             if os.path.exists(full_path):
                 return full_path, p
     return None, None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bidirectional Gallery Sync Manager
+# ─────────────────────────────────────────────────────────────────────────────
+GALLERY_SYNC_CONFIG_PATH = os.path.expanduser("~/.config/nebula/gallery-sync.json")
+GALLERY_SYNC_INDEX_PATH = os.path.expanduser("~/.config/nebula/gallery_sync_index.json")
+
+class GallerySyncManager:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.config = {
+            "enabled": False,
+            "paused": False,
+            "status": "idle",  # idle, syncing, paused, error
+            "progress": "",
+            "last_sync": "Never",
+            "last_sync_timestamp": 0,
+            "last_error": None,
+            "files_synced": 0
+        }
+        self.index = {
+            "synced_files": {}  # hash -> { filename, synced_at, deleted_on_pc, deleted_on_phone }
+        }
+        self.md5_cache = {}
+        self._load()
+        self.trigger_event = threading.Event()
+        self.worker_thread = None
+        self.start_worker()
+
+    def _load(self):
+        try:
+            if os.path.exists(GALLERY_SYNC_CONFIG_PATH):
+                with open(GALLERY_SYNC_CONFIG_PATH, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                    self.config.update(saved)
+                    if self.config.get("status") == "syncing":
+                        self.config["status"] = "idle"
+                        self.config["progress"] = ""
+        except Exception:
+            pass
+
+        try:
+            if os.path.exists(GALLERY_SYNC_INDEX_PATH):
+                with open(GALLERY_SYNC_INDEX_PATH, "r", encoding="utf-8") as f:
+                    self.index = json.load(f)
+        except Exception:
+            pass
+
+    def save(self):
+        with self.lock:
+            try:
+                os.makedirs(os.path.dirname(GALLERY_SYNC_CONFIG_PATH), exist_ok=True)
+                with open(GALLERY_SYNC_CONFIG_PATH, "w", encoding="utf-8") as f:
+                    json.dump(self.config, f, indent=2)
+            except Exception:
+                pass
+            try:
+                os.makedirs(os.path.dirname(GALLERY_SYNC_INDEX_PATH), exist_ok=True)
+                with open(GALLERY_SYNC_INDEX_PATH, "w", encoding="utf-8") as f:
+                    json.dump(self.index, f, indent=2)
+            except Exception:
+                pass
+
+    def get_status(self):
+        with self.lock:
+            status = dict(self.config)
+            paired = pairing_mgr.data.get("paired_device") or {}
+            status["paired_device_name"] = paired.get("name")
+            status["is_paired"] = bool(paired)
+            return status
+
+    def toggle(self, enabled):
+        with self.lock:
+            self.config["enabled"] = bool(enabled)
+            if not self.config["enabled"]:
+                self.config["status"] = "idle"
+                self.config["progress"] = ""
+        self.save()
+        if enabled:
+            self.trigger_event.set()
+        return self.get_status()
+
+    def set_paused(self, paused):
+        with self.lock:
+            self.config["paused"] = bool(paused)
+            if self.config["paused"]:
+                self.config["status"] = "paused"
+            elif self.config["enabled"]:
+                self.config["status"] = "idle"
+        self.save()
+        if not paused and self.config["enabled"]:
+            self.trigger_event.set()
+        return self.get_status()
+
+    def sync_now(self):
+        self.trigger_event.set()
+        return self.get_status()
+
+    def compute_file_hash(self, file_path):
+        try:
+            stat = os.stat(file_path)
+            key = (file_path, stat.st_mtime, stat.st_size)
+            if key in self.md5_cache:
+                return self.md5_cache[key]
+            h = hashlib.md5()
+            with open(file_path, "rb") as f:
+                while chunk := f.read(65536):
+                    h.update(chunk)
+            digest = h.hexdigest()
+            self.md5_cache[key] = digest
+            return digest
+        except Exception:
+            return None
+
+    def get_pc_manifest(self):
+        pics_dir = get_pictures_dir()
+        allowed_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".svg"}
+        manifest = []
+        try:
+            for root, _, files in os.walk(pics_dir):
+                for file in files:
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in allowed_exts:
+                        full_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(full_path, pics_dir).replace("\\", "/")
+                        h = self.compute_file_hash(full_path)
+                        if h:
+                            stat = os.stat(full_path)
+                            manifest.append({
+                                "filename": file,
+                                "rel_path": rel_path,
+                                "size": stat.st_size,
+                                "mtime": int(stat.st_mtime),
+                                "hash": h
+                            })
+        except Exception:
+            pass
+        return manifest
+
+    def save_uploaded_photo(self, filename, file_hash, mtime, data):
+        pics_dir = get_pictures_dir()
+        os.makedirs(pics_dir, exist_ok=True)
+        tmp_path = os.path.join(pics_dir, f".tmp_up_{int(time.time())}_{filename}")
+        final_path = os.path.join(pics_dir, filename)
+
+        with open(tmp_path, "wb") as f:
+            f.write(data)
+
+        computed = self.compute_file_hash(tmp_path)
+        if file_hash and computed != file_hash:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            return False, "Checksum mismatch"
+
+        # Disambiguate if needed
+        if os.path.exists(final_path) and self.compute_file_hash(final_path) != computed:
+            base, ext = os.path.splitext(filename)
+            final_path = os.path.join(pics_dir, f"{base}_{computed[:6]}{ext}")
+
+        os.replace(tmp_path, final_path)
+        if mtime:
+            try:
+                os.utime(final_path, (mtime, mtime))
+            except Exception:
+                pass
+
+        with self.lock:
+            self.index.setdefault("synced_files", {})[computed] = {
+                "filename": os.path.basename(final_path),
+                "synced_at": time.time(),
+                "deleted_on_pc": False,
+                "deleted_on_phone": False
+            }
+            self.config["files_synced"] += 1
+        self.save()
+        return True, final_path
+
+    def delete_photo_by_hash(self, file_hash, rel_path=None):
+        pics_dir = get_pictures_dir()
+        target = None
+        if rel_path:
+            p = os.path.join(pics_dir, rel_path)
+            if os.path.exists(p):
+                target = p
+        if not target and file_hash:
+            for item in self.get_pc_manifest():
+                if item["hash"] == file_hash:
+                    target = os.path.join(pics_dir, item["rel_path"])
+                    break
+
+        if target and os.path.exists(target):
+            try:
+                os.remove(target)
+            except Exception:
+                pass
+
+        with self.lock:
+            idx = self.index.setdefault("synced_files", {})
+            if file_hash in idx:
+                idx[file_hash]["deleted_on_phone"] = True
+            else:
+                idx[file_hash] = {"deleted_on_phone": True, "synced_at": time.time()}
+        self.save()
+        return True
+
+    def start_worker(self):
+        def worker_loop():
+            while True:
+                self.trigger_event.wait(timeout=25)
+                self.trigger_event.clear()
+
+                if not self.config.get("enabled") or self.config.get("paused"):
+                    continue
+
+                paired = pairing_mgr.data.get("paired_device") or {}
+                phone_ip = paired.get("last_ip")
+                if not phone_ip:
+                    continue
+
+                try:
+                    self._perform_sync_cycle(phone_ip)
+                except Exception as e:
+                    with self.lock:
+                        self.config["status"] = "error"
+                        self.config["last_error"] = str(e)
+                    self.save()
+
+        self.worker_thread = threading.Thread(target=worker_loop, daemon=True)
+        self.worker_thread.start()
+
+    def _perform_sync_cycle(self, phone_ip):
+        with self.lock:
+            self.config["status"] = "syncing"
+            self.config["progress"] = "Connecting to mobile gallery..."
+            self.config["last_error"] = None
+        self.save()
+
+        import urllib.request
+        phone_url = f"http://{phone_ip}:53319/gallery/manifest"
+        req = urllib.request.Request(phone_url)
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                phone_data = json.loads(resp.read().decode())
+        except Exception as e:
+            with self.lock:
+                self.config["status"] = "idle"
+                self.config["last_error"] = f"Phone unreachable: {e}"
+            self.save()
+            return
+
+        phone_items = phone_data.get("pictures", [])
+        phone_by_hash = {p["hash"]: p for p in phone_items if p.get("hash")}
+        phone_hashes = set(phone_by_hash.keys())
+
+        pc_manifest = self.get_pc_manifest()
+        pc_by_hash = {p["hash"]: p for p in pc_manifest if p.get("hash")}
+        pc_hashes = set(pc_by_hash.keys())
+
+        pics_dir = get_pictures_dir()
+        synced_index = self.index.setdefault("synced_files", {})
+
+        # Phone -> PC additions
+        to_download = []
+        for h, p_item in phone_by_hash.items():
+            if h not in pc_hashes:
+                idx_entry = synced_index.get(h)
+                if idx_entry and idx_entry.get("deleted_on_pc"):
+                    continue
+                to_download.append(p_item)
+
+        # PC -> Phone additions
+        to_upload = []
+        for h, pc_item in pc_by_hash.items():
+            if h not in phone_hashes:
+                idx_entry = synced_index.get(h)
+                if idx_entry and idx_entry.get("deleted_on_phone"):
+                    continue
+                to_upload.append(pc_item)
+
+        # Deletions on phone -> remove from PC
+        for h, idx_entry in list(synced_index.items()):
+            if h not in phone_hashes and h in pc_hashes and not idx_entry.get("deleted_on_phone"):
+                pc_path = os.path.join(pics_dir, pc_by_hash[h]["rel_path"])
+                try:
+                    if os.path.exists(pc_path):
+                        os.remove(pc_path)
+                except Exception:
+                    pass
+                idx_entry["deleted_on_phone"] = True
+
+        # Deletions on PC -> notify phone
+        for h, idx_entry in list(synced_index.items()):
+            if h not in pc_hashes and h in phone_hashes and not idx_entry.get("deleted_on_pc"):
+                try:
+                    p_id = phone_by_hash[h].get("id")
+                    del_payload = json.dumps({"hash": h, "id": p_id, "name": phone_by_hash[h].get("name")}).encode()
+                    del_req = urllib.request.Request(
+                        f"http://{phone_ip}:53319/gallery/delete",
+                        data=del_payload,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    urllib.request.urlopen(del_req, timeout=5)
+                except Exception:
+                    pass
+                idx_entry["deleted_on_pc"] = True
+
+        total_transfers = len(to_download) + len(to_upload)
+        step = 0
+
+        # Perform downloads from phone
+        for item in to_download:
+            if not self.config.get("enabled") or self.config.get("paused"):
+                break
+            step += 1
+            filename = item.get("name") or f"photo_{item.get('id')}.jpg"
+            with self.lock:
+                self.config["progress"] = f"Receiving {filename} ({step}/{total_transfers})..."
+            self.save()
+
+            dl_url = f"http://{phone_ip}:53319/gallery/download?id={item['id']}"
+            tmp_path = os.path.join(pics_dir, f".tmp_sync_{item['hash']}")
+            final_path = os.path.join(pics_dir, filename)
+
+            if os.path.exists(final_path):
+                if self.compute_file_hash(final_path) == item["hash"]:
+                    synced_index[item["hash"]] = {"filename": filename, "synced_at": time.time()}
+                    continue
+                base, ext = os.path.splitext(filename)
+                final_path = os.path.join(pics_dir, f"{base}_{item['hash'][:6]}{ext}")
+
+            try:
+                with urllib.request.urlopen(dl_url, timeout=30) as resp:
+                    with open(tmp_path, "wb") as out_f:
+                        while chunk := resp.read(65536):
+                            out_f.write(chunk)
+
+                if self.compute_file_hash(tmp_path) == item["hash"]:
+                    os.replace(tmp_path, final_path)
+                    if item.get("mtime"):
+                        try:
+                            os.utime(final_path, (item["mtime"], item["mtime"]))
+                        except Exception:
+                            pass
+                    synced_index[item["hash"]] = {
+                        "filename": os.path.basename(final_path),
+                        "synced_at": time.time(),
+                        "deleted_on_pc": False,
+                        "deleted_on_phone": False
+                    }
+                    with self.lock:
+                        self.config["files_synced"] += 1
+                else:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+            except Exception:
+                if os.path.exists(tmp_path):
+                    try: os.remove(tmp_path)
+                    except Exception: pass
+
+        # Perform uploads to phone
+        for item in to_upload:
+            if not self.config.get("enabled") or self.config.get("paused"):
+                break
+            step += 1
+            full_path = os.path.join(pics_dir, item["rel_path"])
+            if not os.path.exists(full_path):
+                continue
+            with self.lock:
+                self.config["progress"] = f"Sending {item['filename']} ({step}/{total_transfers})..."
+            self.save()
+
+            try:
+                with open(full_path, "rb") as f:
+                    file_data = f.read()
+                upload_req = urllib.request.Request(
+                    f"http://{phone_ip}:53319/gallery/upload",
+                    data=file_data,
+                    headers={
+                        "Content-Type": "application/octet-stream",
+                        "X-File-Name": item["filename"],
+                        "X-File-Hash": item["hash"],
+                        "X-File-Mtime": str(item["mtime"])
+                    }
+                )
+                with urllib.request.urlopen(upload_req, timeout=30) as resp:
+                    if resp.status == 200:
+                        synced_index[item["hash"]] = {
+                            "filename": item["filename"],
+                            "synced_at": time.time(),
+                            "deleted_on_pc": False,
+                            "deleted_on_phone": False
+                        }
+                        with self.lock:
+                            self.config["files_synced"] += 1
+            except Exception:
+                pass
+
+        with self.lock:
+            self.config["status"] = "idle"
+            self.config["progress"] = ""
+            self.config["last_sync"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            self.config["last_sync_timestamp"] = time.time()
+        self.save()
+
+gallery_sync_mgr = GallerySyncManager()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Peer Discovery (PetalDrop)
@@ -947,9 +1354,52 @@ class CompanionHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"events": events}).encode())
 
+        elif path == "/api/gallery/sync/status":
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(gallery_sync_mgr.get_status()).encode())
+
+        elif path == "/api/gallery/sync/manifest":
+            manifest = gallery_sync_mgr.get_pc_manifest()
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"pictures": manifest}).encode())
+
+        elif path == "/api/gallery/sync/download":
+            rel_path = query.get("path", [""])[0]
+            pics_dir = get_pictures_dir()
+            target_path = os.path.join(pics_dir, rel_path)
+            if not os.path.abspath(target_path).startswith(os.path.abspath(pics_dir)) or not os.path.exists(target_path):
+                self.send_error(404, "File not found")
+                return
+
+            stat = os.stat(target_path)
+            h = gallery_sync_mgr.compute_file_hash(target_path) or ""
+            mime_type = mimetypes.guess_type(target_path)[0] or "application/octet-stream"
+
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", mime_type)
+            self.send_header("Content-Length", str(stat.st_size))
+            self.send_header("X-File-Hash", h)
+            self.send_header("X-File-Mtime", str(int(stat.st_mtime)))
+            self.end_headers()
+            with open(target_path, "rb") as f:
+                while chunk := f.read(65536):
+                    self.wfile.write(chunk)
+
         elif path == "/api/mirror/status":
             with mirror_lock:
-                status = {"active": mirror_active}
+                status = {
+                    "active": mirror_active,
+                    "state": mirror_state,
+                    "error": mirror_error,
+                    "paired_name": (pairing_mgr.data.get("paired_device") or {}).get("name")
+                }
             self.send_response(200)
             self._send_cors()
             self.send_header("Content-Type", "application/json")
@@ -984,7 +1434,7 @@ class CompanionHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
     def do_POST(self):
-        global mirror_active, mirror_client_proc, latest_mirror_frame
+        global mirror_active, mirror_client_proc, latest_mirror_frame, mirror_state, mirror_error
         parsed = urlparse(self.path)
         path = parsed.path
         content_len = int(self.headers.get("Content-Length", 0))
@@ -1289,15 +1739,152 @@ class CompanionHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"pong": True}).encode())
 
+        elif path == "/api/gallery/sync/toggle":
+            try:
+                data = json.loads(body.decode()) if body else {}
+                en = data.get("enabled", True)
+                status = gallery_sync_mgr.toggle(en)
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "status": status}).encode())
+            except Exception as e:
+                self.send_error(400, str(e))
+
+        elif path == "/api/gallery/sync/pause":
+            try:
+                data = json.loads(body.decode()) if body else {}
+                paused = data.get("paused", True)
+                status = gallery_sync_mgr.set_paused(paused)
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "status": status}).encode())
+            except Exception as e:
+                self.send_error(400, str(e))
+
+        elif path == "/api/gallery/sync/now":
+            status = gallery_sync_mgr.sync_now()
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": True, "status": status}).encode())
+
+        elif path == "/api/gallery/sync/upload":
+            filename = self.headers.get("X-File-Name", f"photo_{int(time.time())}.jpg")
+            file_hash = self.headers.get("X-File-Hash", "")
+            mtime = int(self.headers.get("X-File-Mtime", 0)) or int(time.time())
+            ok, res = gallery_sync_mgr.save_uploaded_photo(filename, file_hash, mtime, body)
+            if ok:
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "path": res}).encode())
+            else:
+                self.send_response(400)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": res}).encode())
+
+        elif path == "/api/gallery/sync/delete":
+            try:
+                data = json.loads(body.decode()) if body else {}
+                file_hash = data.get("hash", "")
+                rel_path = data.get("rel_path", "")
+                gallery_sync_mgr.delete_photo_by_hash(file_hash, rel_path)
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True}).encode())
+            except Exception as e:
+                self.send_error(400, str(e))
+
+        elif path == "/api/mirror/request":
+            try:
+                data = json.loads(body.decode()) if body else {}
+                target_ip = data.get("target_ip")
+                if not target_ip:
+                    paired = pairing_mgr.data.get("paired_device") or {}
+                    target_ip = paired.get("last_ip")
+
+                if not target_ip:
+                    with mirror_lock:
+                        mirror_state = "error"
+                        mirror_error = "No paired phone found. Connect via MyNebula first."
+                    self.send_response(400)
+                    self._send_cors()
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": False, "error": mirror_error, "state": mirror_state}).encode())
+                    return
+
+                with mirror_lock:
+                    mirror_state = "requesting"
+                    mirror_error = None
+
+                def _send_req():
+                    global mirror_state, mirror_error
+                    try:
+                        import urllib.request
+                        my_ip = get_local_ip()
+                        req_data = json.dumps({"requester": "NebulaOS PC", "requester_ip": my_ip}).encode()
+                        url = f"http://{target_ip}:53319/mirror_request"
+                        req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json"})
+                        urllib.request.urlopen(req, timeout=5)
+                    except Exception as ex:
+                        with mirror_lock:
+                            mirror_state = "error"
+                            mirror_error = f"Cannot reach phone on local network: {ex}"
+
+                threading.Thread(target=_send_req, daemon=True).start()
+
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "state": "requesting"}).encode())
+            except Exception as e:
+                self.send_error(400, str(e))
+
+        elif path == "/api/mirror/response":
+            try:
+                data = json.loads(body.decode()) if body else {}
+                allowed = data.get("allowed", False)
+                reason = data.get("reason", "Declined by user")
+                with mirror_lock:
+                    if allowed:
+                        mirror_state = "approved"
+                        mirror_error = None
+                    else:
+                        mirror_state = "denied"
+                        mirror_error = reason
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "state": mirror_state}).encode())
+            except Exception as e:
+                self.send_error(400, str(e))
+
         elif path == "/api/mirror/start":
             try:
                 data = json.loads(body.decode()) if body else {}
                 dev_name = data.get("device_name", "Android Phone")
                 with mirror_lock:
                     mirror_active = True
+                    mirror_state = "streaming"
                 # Launch Desktop Screen Mirroring Viewer window
                 try:
-                    subprocess.Popen(["python3", "/usr/share/mynebula-screen-mirror/screen-mirror.py", dev_name])
+                    script_path = "/usr/share/mynebula-screen-mirror/screen-mirror.py"
+                    if not os.path.exists(script_path):
+                        script_path = os.path.join(os.path.dirname(__file__), "../../apps/mynebula-screen-mirror/screen-mirror.py")
+                    subprocess.Popen(["python3", script_path, dev_name])
                 except Exception as e:
                     print(f"[Companion] Failed to launch screen mirror viewer: {e}")
 

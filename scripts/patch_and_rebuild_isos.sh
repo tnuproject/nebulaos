@@ -758,11 +758,13 @@ if [ -n "${DEB_FILE}" ] && [ -f "${DEB_FILE}" ]; then
     cp "${DEB_FILE}" "${CHROOT_TMP}/tmp/nebula-desktop.deb"
     chroot "${CHROOT_TMP}" dpkg -i /tmp/nebula-desktop.deb 2>/dev/null || chroot "${CHROOT_TMP}" apt-get install -f -y
     rm -f "${CHROOT_TMP}/tmp/nebula-desktop.deb"
+    rm -f "${CHROOT_TMP}/var/lib/nebulaos/ota_update_pending"
 fi
 
 echo "[7/8] Cleaning up and repacking SquashFS..."
 chroot "${CHROOT_TMP}" apt-get clean
 rm -rf "${CHROOT_TMP}/tmp/"* "${CHROOT_TMP}/var/tmp/"*
+rm -f "${CHROOT_TMP}/var/lib/nebulaos/ota_update_pending"
 
 cleanup
 trap - EXIT

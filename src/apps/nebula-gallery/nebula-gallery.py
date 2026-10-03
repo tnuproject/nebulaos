@@ -144,6 +144,22 @@ class GalleryWindow(Adw.ApplicationWindow):
         self.show_grid()
         self._load_photos()
 
+        # Monitor pictures directory for real-time updates when synced
+        try:
+            gfile = Gio.File.new_for_path(PICTURES_DIR)
+            self.monitor = gfile.monitor_directory(Gio.FileMonitorFlags.NONE, None)
+            self.monitor.connect("changed", self._on_pictures_changed)
+        except Exception:
+            self.monitor = None
+
+        self._check_sync_status()
+        GLib.timeout_add_seconds(5, lambda: (self._check_sync_status(), True)[1])
+
+    def _on_pictures_changed(self, monitor, file, other_file, event_type):
+        if hasattr(self, "_reload_timeout_id") and self._reload_timeout_id:
+            GLib.source_remove(self._reload_timeout_id)
+        self._reload_timeout_id = GLib.timeout_add(800, lambda: (setattr(self, "_reload_timeout_id", None), self._load_photos(), False)[2])
+
     def _build_grid_view(self):
         grid_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
@@ -160,10 +176,14 @@ class GalleryWindow(Adw.ApplicationWindow):
 
         action_bar.append(Gtk.Box(hexpand=True))
 
-        btn_sync = Gtk.Button(label="Sync with Phone")
-        btn_sync.add_css_class("flat")
-        btn_sync.connect("clicked", self._sync_mynebula)
-        action_bar.append(btn_sync)
+        self.sync_badge = Gtk.Label(label="", css_classes=["caption", "dim-label"])
+        self.sync_badge.set_valign(Gtk.Align.CENTER)
+        action_bar.append(self.sync_badge)
+
+        self.btn_sync = Gtk.Button(label="Sync with Phone")
+        self.btn_sync.add_css_class("flat")
+        self.btn_sync.connect("clicked", self._sync_mynebula)
+        action_bar.append(self.btn_sync)
 
         btn_refresh = Gtk.Button(icon_name="view-refresh-symbolic")
         btn_refresh.connect("clicked", lambda _: self._load_photos())
@@ -440,15 +460,88 @@ class GalleryWindow(Adw.ApplicationWindow):
         dialog.add_response("ok", "OK")
         dialog.present()
 
+    def _check_sync_status(self):
+        def _task():
+            data = {}
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:53317/api/gallery/sync/status", timeout=1.5) as resp:
+                    data = json.loads(resp.read().decode())
+            except Exception:
+                pass
+
+            def _apply():
+                enabled = data.get("enabled", False)
+                paused = data.get("paused", False)
+                status = data.get("status", "idle")
+                dev_name = data.get("paired_device_name")
+
+                if enabled:
+                    if paused:
+                        self.sync_badge.set_text("Sync: Paused")
+                    elif status == "syncing":
+                        self.sync_badge.set_text("Syncing photos...")
+                    else:
+                        self.sync_badge.set_text(f"Synced with {dev_name}" if dev_name else "Phone Sync: Ready")
+                    self.btn_sync.set_label("Sync Now")
+                else:
+                    self.sync_badge.set_text("Sync: Disabled")
+                    self.btn_sync.set_label("Sync with Phone")
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(_apply)
+        threading.Thread(target=_task, daemon=True).start()
+
     def _sync_mynebula(self, btn):
         btn.set_sensitive(False)
         def _task():
+            status_data = {}
             try:
-                urllib.request.urlopen("http://127.0.0.1:53317/api/gallery", timeout=3)
+                with urllib.request.urlopen("http://127.0.0.1:53317/api/gallery/sync/status", timeout=2) as resp:
+                    status_data = json.loads(resp.read().decode())
             except Exception:
                 pass
-            GLib.idle_add(lambda: (btn.set_sensitive(True), self._load_photos()))
+
+            enabled = status_data.get("enabled", False)
+            if not enabled:
+                def _show_disabled_dialog():
+                    btn.set_sensitive(True)
+                    dialog = Adw.MessageDialog(
+                        transient_for=self,
+                        heading="Gallery Sync is Disabled",
+                        body="Photo synchronization with your phone is currently turned off.\n\nYou can enable it at any time in Settings > MyNebula > Gallery Sync."
+                    )
+                    dialog.add_response("cancel", "Cancel")
+                    dialog.add_response("settings", "Open Settings")
+                    dialog.set_response_appearance("settings", Adw.ResponseAppearance.SUGGESTED)
+                    dialog.connect("response", self._on_open_settings_response)
+                    dialog.present()
+                    return GLib.SOURCE_REMOVE
+                GLib.idle_add(_show_disabled_dialog)
+                return
+
+            try:
+                req = urllib.request.Request(
+                    "http://127.0.0.1:53317/api/gallery/sync/now",
+                    data=b"{}",
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req, timeout=5)
+            except Exception:
+                pass
+
+            GLib.idle_add(lambda: (btn.set_sensitive(True), self._load_photos(), self._check_sync_status()))
+
         threading.Thread(target=_task, daemon=True).start()
+
+    def _on_open_settings_response(self, dialog, response):
+        if response == "settings":
+            try:
+                subprocess.Popen(["nebula-settings"])
+            except Exception:
+                try:
+                    subprocess.Popen(["python3", "/usr/share/nebula-settings/nebula-settings.py"])
+                except Exception:
+                    pass
 
 def main():
     _wizard_done = os.path.exists(os.path.expanduser("~/.config/nebula/postinstall-wizard-completed")) or os.path.exists("/run/nebula-desktop-unlocked")

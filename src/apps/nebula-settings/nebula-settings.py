@@ -471,18 +471,218 @@ class MyNebulaPanel(SettingsPanel):
         self.qr_row.set_child(self.qr_box)
         pair_grp.add(self.qr_row)
 
-        # ── Features ──
+        # ── Gallery Sync ──
+        self.gallery_grp = Adw.PreferencesGroup(
+            title="Gallery Sync",
+            description="Real bidirectional photo synchronization between NebulaOS (~/Pictures) and mobile gallery"
+        )
+        self.add(self.gallery_grp)
+
+        self.gallery_toggle_row, self.gallery_sw = create_switch_row(
+            "Sync Mobile Gallery",
+            "Automatically synchronize photos bidirectionally with paired phone",
+            active=False,
+            on_toggled=self._on_gallery_sync_toggled,
+            icon_name="folder-pictures-symbolic"
+        )
+        self.gallery_grp.add(self.gallery_toggle_row)
+
+        self.gallery_device_row = create_action_row(
+            "Paired Device",
+            "Checking...",
+            icon_name="phone-symbolic"
+        )
+        self.gallery_grp.add(self.gallery_device_row)
+
+        self.gallery_status_row = create_action_row(
+            "Sync Status",
+            "Disabled",
+            icon_name="emblem-synchronizing-symbolic"
+        )
+        self.gallery_grp.add(self.gallery_status_row)
+
+        self.gallery_last_sync_row = create_action_row(
+            "Last Synchronization",
+            "Never",
+            icon_name="document-open-recent-symbolic"
+        )
+        self.gallery_grp.add(self.gallery_last_sync_row)
+
+        self.gallery_progress_row = create_action_row(
+            "Transfer Progress",
+            "",
+            icon_name="network-transmit-receive-symbolic"
+        )
+        self.gallery_progress_row.set_visible(False)
+        self.gallery_grp.add(self.gallery_progress_row)
+
+        self.gallery_error_row = create_action_row(
+            "Sync Issues",
+            "",
+            icon_name="dialog-warning-symbolic"
+        )
+        self.gallery_error_row.set_visible(False)
+        self.gallery_grp.add(self.gallery_error_row)
+
+        self.gallery_actions_row = Adw.ActionRow(title="Sync Controls", subtitle="Manual trigger and temporary pause")
+        self.btn_sync_now = Gtk.Button(label="Sync Now", css_classes=["suggested-action"])
+        self.btn_sync_now.set_valign(Gtk.Align.CENTER)
+        self.btn_sync_now.connect("clicked", self._sync_gallery_now)
+        self.gallery_actions_row.add_suffix(self.btn_sync_now)
+
+        self.btn_pause_sync = Gtk.Button(label="Pause Sync", css_classes=["flat"])
+        self.btn_pause_sync.set_valign(Gtk.Align.CENTER)
+        self.btn_pause_sync.connect("clicked", self._toggle_pause_sync)
+        self.gallery_actions_row.add_suffix(self.btn_pause_sync)
+
+        self.gallery_grp.add(self.gallery_actions_row)
+
+        # ── Screen Mirroring ──
+        mirror_grp = Adw.PreferencesGroup(
+            title="Screen Mirroring",
+            description="View and control your Android display wirelessly on your PC"
+        )
+        self.add(mirror_grp)
+
+        mirror_row = Adw.ActionRow(
+            title="Phone Screen Mirroring",
+            subtitle="Send mirror request to phone and open live streaming window"
+        )
+        mirror_icon = Gtk.Image.new_from_icon_name("video-display-symbolic")
+        mirror_icon.set_pixel_size(20)
+        mirror_row.add_prefix(mirror_icon)
+
+        btn_mirror = Gtk.Button(label="Mirror Screen", css_classes=["suggested-action"])
+        btn_mirror.set_valign(Gtk.Align.CENTER)
+        btn_mirror.connect("clicked", self._start_screen_mirror)
+        mirror_row.add_suffix(btn_mirror)
+        mirror_grp.add(mirror_row)
+
+        # ── Other Features ──
         feat_grp = Adw.PreferencesGroup(title="Features")
         self.add(feat_grp)
         petal_row, _ = create_switch_row("PetalDrop Direct Share", "Fast wireless P2P file transfers", active=True)
         feat_grp.add(petal_row)
-        photo_row, _ = create_switch_row("Automatic Photo Organization", "Categorize and sync photos from mobile", active=True)
-        feat_grp.add(photo_row)
         notif_row, _ = create_switch_row("Notification Mirroring", "Receive phone alerts directly on the desktop", active=True)
         feat_grp.add(notif_row)
 
         self._check_pairing_status()
         self._load_pairing_info()
+        self._update_gallery_sync_ui()
+        GLib.timeout_add_seconds(3, lambda: (self._update_gallery_sync_ui(), True)[1])
+
+    def _on_gallery_sync_toggled(self, active):
+        def _task():
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    "http://127.0.0.1:53317/api/gallery/sync/toggle",
+                    data=json.dumps({"enabled": active}).encode(),
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req, timeout=3)
+            except Exception:
+                pass
+            self._update_gallery_sync_ui()
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _sync_gallery_now(self, btn):
+        btn.set_sensitive(False)
+        def _task():
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    "http://127.0.0.1:53317/api/gallery/sync/now",
+                    data=b"{}",
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req, timeout=3)
+            except Exception:
+                pass
+            GLib.idle_add(lambda: btn.set_sensitive(True))
+            self._update_gallery_sync_ui()
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _toggle_pause_sync(self, btn):
+        def _task():
+            is_paused = (btn.get_label() == "Resume Sync")
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    "http://127.0.0.1:53317/api/gallery/sync/pause",
+                    data=json.dumps({"paused": not is_paused}).encode(),
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req, timeout=3)
+            except Exception:
+                pass
+            self._update_gallery_sync_ui()
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _start_screen_mirror(self, _):
+        def _launch():
+            script_path = "/usr/share/mynebula-screen-mirror/screen-mirror.py"
+            if not os.path.exists(script_path):
+                script_path = os.path.join(os.path.dirname(__file__), "../mynebula-screen-mirror/screen-mirror.py")
+            subprocess.Popen(["python3", script_path])
+        threading.Thread(target=_launch, daemon=True).start()
+
+    def _update_gallery_sync_ui(self):
+        def _fetch():
+            data = {}
+            try:
+                import urllib.request
+                with urllib.request.urlopen("http://127.0.0.1:53317/api/gallery/sync/status", timeout=2) as resp:
+                    data = json.loads(resp.read().decode())
+            except Exception:
+                pass
+
+            def _apply():
+                enabled = data.get("enabled", False)
+                paused = data.get("paused", False)
+                status_str = data.get("status", "idle").capitalize()
+                progress = data.get("progress", "")
+                last_sync = data.get("last_sync", "Never")
+                last_error = data.get("last_error")
+                dev_name = data.get("paired_device_name") or "No device connected"
+
+                if self.gallery_sw.get_active() != enabled:
+                    self.gallery_sw.set_active(enabled)
+
+                self.gallery_device_row.set_subtitle(dev_name)
+
+                if not enabled:
+                    self.gallery_status_row.set_subtitle("Disabled (turn ON toggle above to activate)")
+                elif paused:
+                    self.gallery_status_row.set_subtitle("Paused")
+                elif status_str == "Syncing":
+                    self.gallery_status_row.set_subtitle("Syncing photos...")
+                else:
+                    self.gallery_status_row.set_subtitle("Idle • Up to date")
+
+                self.gallery_last_sync_row.set_subtitle(last_sync)
+
+                if progress and enabled:
+                    self.gallery_progress_row.set_subtitle(progress)
+                    self.gallery_progress_row.set_visible(True)
+                else:
+                    self.gallery_progress_row.set_visible(False)
+
+                if last_error and enabled:
+                    self.gallery_error_row.set_subtitle(last_error)
+                    self.gallery_error_row.set_visible(True)
+                else:
+                    self.gallery_error_row.set_visible(False)
+
+                self.btn_sync_now.set_sensitive(enabled and not paused)
+                self.btn_pause_sync.set_sensitive(enabled)
+                self.btn_pause_sync.set_label("Resume Sync" if paused else "Pause Sync")
+
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(_apply)
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def _check_pairing_status(self):
         def _task():
@@ -1611,8 +1811,8 @@ class SettingsWindow(Adw.ApplicationWindow):
         sidebar_box.set_vexpand(True)
 
         sidebar_header = Adw.HeaderBar()
+        sidebar_header.set_show_start_title_buttons(True)
         sidebar_header.set_show_end_title_buttons(False)
-        sidebar_header.set_show_start_title_buttons(False)
         sidebar_header.set_title_widget(Gtk.Label(label="Settings", css_classes=["title-2", "bold"]))
         sidebar_box.append(sidebar_header)
 
@@ -1625,6 +1825,8 @@ class SettingsWindow(Adw.ApplicationWindow):
         # ── Right Content Box ──
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, vexpand=True)
         self.content_header = Adw.HeaderBar()
+        self.content_header.set_show_start_title_buttons(False)
+        self.content_header.set_show_end_title_buttons(False)
         content_box.append(self.content_header)
 
         self.stack = Gtk.Stack()

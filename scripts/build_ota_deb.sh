@@ -105,6 +105,11 @@ fi
 # Clear thumbnail cache for users so Nautilus re-renders .desktop previews immediately
 rm -rf /home/*/.cache/thumbnails/ 2>/dev/null || true
 
+# Record OTA update pending for first-boot notification
+mkdir -p /var/lib/nebulaos
+echo "${PKG_VERSION}" > /var/lib/nebulaos/ota_update_pending
+chmod 666 /var/lib/nebulaos/ota_update_pending 2>/dev/null || true
+
 exit 0
 EOF
     chmod 755 "${PKG_STAGE}/DEBIAN/postinst"
@@ -118,6 +123,9 @@ EOF
 
     cp -f "${ROOT_DIR}/src/system/nebula-desktop-launcher" "${PKG_STAGE}/usr/bin/nebula-desktop-launcher"
     chmod 755 "${PKG_STAGE}/usr/bin/nebula-desktop-launcher"
+
+    cp -f "${ROOT_DIR}/src/system/nebula-welcome-launcher" "${PKG_STAGE}/usr/bin/nebula-welcome-launcher"
+    chmod 755 "${PKG_STAGE}/usr/bin/nebula-welcome-launcher"
 
     cp -f "${ROOT_DIR}/src/apps/desktop-entries/nebula-desktop-launcher.desktop" "${PKG_STAGE}/usr/share/applications/nebula-desktop-launcher.desktop"
     chmod 644 "${PKG_STAGE}/usr/share/applications/nebula-desktop-launcher.desktop"
