@@ -89,12 +89,18 @@ if [ -f /usr/lib/os-release ]; then
     sed -i 's/^LOGO=.*/LOGO=nebulaos-symbol/' /usr/lib/os-release
 fi
 
-# Ensure mime association for .desktop launcher
+# Ensure mime association for .desktop launcher and nebula-gallery
 for mf in /etc/xdg/mimeapps.list /usr/share/applications/mimeapps.list; do
     if [ -f "$mf" ]; then
         if ! grep -q "application/x-desktop" "$mf"; then
             sed -i '/\[Default Applications\]/a application/x-desktop=nebula-desktop-launcher.desktop' "$mf" 2>/dev/null || true
         fi
+        for img_mime in image/jpeg image/png image/webp image/gif image/bmp image/svg+xml; do
+            if ! grep -q "^${img_mime}=" "$mf"; then
+                sed -i "/\[Default Applications\]/a ${img_mime}=nebula-gallery.desktop" "$mf" 2>/dev/null || true
+                sed -i "/\[Added Associations\]/a ${img_mime}=nebula-gallery.desktop;" "$mf" 2>/dev/null || true
+            fi
+        done
     fi
 done
 
@@ -165,6 +171,33 @@ fi
 if command -v update-desktop-database &>/dev/null; then
     update-desktop-database /usr/share/applications 2>/dev/null || true
 fi
+
+# Ensure default image viewer is nebula-gallery for all users
+for udir in /etc/skel /home/*; do
+    if [ -d "$udir" ]; then
+        mkdir -p "$udir/.config"
+        mf="$udir/.config/mimeapps.list"
+        touch "$mf"
+        for img_mime in image/jpeg image/png image/webp image/gif image/bmp image/svg+xml image/tiff; do
+            sed -i "s|^${img_mime}=.*|${img_mime}=nebula-gallery.desktop|g" "$mf" 2>/dev/null || true
+            if ! grep -q "^${img_mime}=" "$mf"; then
+                if ! grep -q "\[Default Applications\]" "$mf"; then
+                    echo -e "\n[Default Applications]" >> "$mf"
+                fi
+                sed -i "/\[Default Applications\]/a ${img_mime}=nebula-gallery.desktop" "$mf" 2>/dev/null || true
+            fi
+        done
+        chown -R "$(stat -c '%U:%G' "$udir" 2>/dev/null || echo '1000:1000')" "$udir/.config" 2>/dev/null || true
+    fi
+done
+
+# Ensure MyNebula is hidden from App Grid
+for md in /usr/share/applications/mynebula.desktop /usr/local/share/applications/mynebula.desktop; do
+    if [ -f "$md" ]; then
+        sed -i '/^NoDisplay=/d' "$md" 2>/dev/null || true
+        echo "NoDisplay=true" >> "$md"
+    fi
+done
 
 exit 0
 

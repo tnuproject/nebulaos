@@ -282,11 +282,27 @@ cat <<'EOF' > "${CHROOT_DIR}/etc/xdg/mimeapps.list"
 application/vnd.debian.binary-package=install-software.desktop
 application/x-deb=install-software.desktop
 application/x-debian-package=install-software.desktop
+application/x-desktop=nebula-desktop-launcher.desktop
+image/jpeg=nebula-gallery.desktop
+image/png=nebula-gallery.desktop
+image/gif=nebula-gallery.desktop
+image/webp=nebula-gallery.desktop
+image/bmp=nebula-gallery.desktop
+image/tiff=nebula-gallery.desktop
+image/svg+xml=nebula-gallery.desktop
 
 [Added Associations]
 application/vnd.debian.binary-package=install-software.desktop;
 application/x-deb=install-software.desktop;
 application/x-debian-package=install-software.desktop;
+application/x-desktop=nebula-desktop-launcher.desktop;
+image/jpeg=nebula-gallery.desktop;
+image/png=nebula-gallery.desktop;
+image/gif=nebula-gallery.desktop;
+image/webp=nebula-gallery.desktop;
+image/bmp=nebula-gallery.desktop;
+image/tiff=nebula-gallery.desktop;
+image/svg+xml=nebula-gallery.desktop;
 EOF
 
 cp "${CHROOT_DIR}/etc/xdg/mimeapps.list" "${CHROOT_DIR}/usr/share/applications/mimeapps.list"

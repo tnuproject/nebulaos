@@ -135,6 +135,18 @@ class PetalDropWindow(Gtk.ApplicationWindow):
         spacer = Gtk.Box(hexpand=True)
         header.append(spacer)
 
+        # Visibility Toggle Switch
+        self.vis_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.vis_label = Gtk.Label(label="Visible")
+        self.vis_label.add_css_class("petaldrop-subtext")
+        self.vis_switch = Gtk.Switch()
+        self.vis_switch.set_active(True)
+        self.vis_switch.set_valign(Gtk.Align.CENTER)
+        self.vis_switch.connect("state-set", self._on_visibility_toggled)
+        self.vis_box.append(self.vis_label)
+        self.vis_box.append(self.vis_switch)
+        header.append(self.vis_box)
+
         close_btn = Gtk.Button()
         close_btn.add_css_class("petaldrop-close-btn")
         close_icon = Gtk.Image.new_from_icon_name("window-close-symbolic")
@@ -238,6 +250,38 @@ class PetalDropWindow(Gtk.ApplicationWindow):
 
         self.stack.add_named(self.status_box, "status")
         self.stack.set_visible_child_name("dropzone")
+
+        self._setup_dnd()
+        self._load_visibility()
+
+    def _load_visibility(self):
+        def _task():
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:53317/api/drop/visibility", timeout=2) as resp:
+                    data = json.loads(resp.read().decode())
+                    is_vis = bool(data.get("visible", True))
+                    GLib.idle_add(lambda: (
+                        self.vis_switch.set_active(is_vis),
+                        self.vis_label.set_text("Visible" if is_vis else "Hidden")
+                    ))
+            except Exception:
+                pass
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _on_visibility_toggled(self, switch, state):
+        self.vis_label.set_text("Visible" if state else "Hidden")
+        def _task():
+            try:
+                req = urllib.request.Request(
+                    "http://127.0.0.1:53317/api/drop/visibility",
+                    data=json.dumps({"visible": state}).encode(),
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req, timeout=2)
+            except Exception:
+                pass
+        threading.Thread(target=_task, daemon=True).start()
+        return False
 
     def _setup_dnd(self):
         # Native GTK4 Wayland Drag-and-Drop Target
@@ -344,13 +388,14 @@ class PetalDropWindow(Gtk.ApplicationWindow):
             name = peer.get("name", "Unknown Device")
             ip = peer.get("ip", "")
             is_paired = peer.get("is_paired", False)
+            is_laptop = peer.get("is_laptop", False)
 
             btn = Gtk.Button()
             btn.add_css_class("peer-card")
 
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            
-            icon_name = "phone-symbolic" if "Android" in name or is_paired else "computer-symbolic"
+
+            icon_name = "computer-symbolic" if is_laptop else "phone-symbolic"
             dev_icon = Gtk.Image.new_from_icon_name(icon_name)
             dev_icon.set_pixel_size(24)
             row.append(dev_icon)
@@ -363,7 +408,13 @@ class PetalDropWindow(Gtk.ApplicationWindow):
             name_lbl.add_css_class("petaldrop-title")
             info_box.append(name_lbl)
 
-            status_str = "Paired Device" if is_paired else f"Ready • {ip}"
+            if is_paired:
+                status_str = "Paired Device"
+            elif is_laptop:
+                status_str = f"NebulaOS PC • {ip}"
+            else:
+                status_str = f"Nearby Phone • {ip}"
+
             status_lbl = Gtk.Label(label=status_str)
             status_lbl.set_halign(Gtk.Align.START)
             status_lbl.add_css_class("petaldrop-subtext")

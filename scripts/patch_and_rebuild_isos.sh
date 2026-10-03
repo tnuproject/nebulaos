@@ -252,16 +252,24 @@ chroot "${CHROOT_TMP}" update-alternatives --set x-session-manager /usr/bin/gnom
 # Fix GNOME Settings About Logo: write clean os-release and nebulaos-symbol logo
 echo "[5e/8] Configuring NebulaOS symbol in os-release and icon directories..."
 SYS_VER="${RELEASE_VERSION:-$(grep -E '^VERSION=' "${ROOT_DIR}/src/release/release.conf" 2>/dev/null | head -1 | cut -d'"' -f2)}"
-[ -z "$SYS_VER" ] && SYS_VER="26.0"
+[ -z "$SYS_VER" ] && SYS_VER="26.0.1"
 SYS_CHANNEL="${CHANNEL:-$(grep -E '^BUILD_CHANNEL=' "${ROOT_DIR}/src/release/release.conf" 2>/dev/null | head -1 | cut -d'"' -f2)}"
 [ -z "$SYS_CHANNEL" ] && SYS_CHANNEL="stable"
 
+if [ "$SYS_CHANNEL" = "delta" ] && [ -f "${ROOT_DIR}/src/release/delta_rev" ]; then
+    DELTA_REV="$(cat "${ROOT_DIR}/src/release/delta_rev" | tr -d '[:space:]')"
+    if [ -n "$DELTA_REV" ] && ! echo "$SYS_VER" | grep -qi "rev"; then
+        BASE_V="$(echo "$SYS_VER" | sed -E 's/[-~](delta\.?)?rev[0-9]+.*//')"
+        SYS_VER="${BASE_V}-delta.rev${DELTA_REV}"
+    fi
+fi
+
 rm -f "${CHROOT_TMP}/etc/os-release" "${CHROOT_TMP}/usr/lib/os-release"
 cat <<OSRELEOF > "${CHROOT_TMP}/usr/lib/os-release"
-PRETTY_NAME="NebulaOS ${SYS_VER} \"Apollo\""
+PRETTY_NAME="NebulaOS ${SYS_VER} (Apollo)"
 NAME="NebulaOS"
 VERSION_ID="${SYS_VER}"
-VERSION="${SYS_VER} \"Apollo\""
+VERSION="${SYS_VER} (Apollo)"
 VERSION_CODENAME=apollo
 ID=nebulaos
 ID_LIKE=debian
@@ -692,6 +700,7 @@ for app_file in \
     "${CHROOT_TMP}/usr/share/applications/org.gnome.eog.desktop" \
     "${CHROOT_TMP}/usr/share/applications/eog.desktop" \
     "${CHROOT_TMP}/usr/share/applications/installer.desktop" \
+    "${CHROOT_TMP}/usr/share/applications/mynebula.desktop" \
     "${CHROOT_TMP}/usr/share/applications/nebula-recovery.desktop"; do
     if [ -f "${app_file}" ]; then
         if grep -q "NoDisplay=" "${app_file}"; then
@@ -767,7 +776,9 @@ for dtf in "${CHROOT_TMP}/home/nebula/Desktop/"*.desktop "${CHROOT_TMP}/etc/skel
 done
 
 # Build OTA deb packages and register base nebula-desktop in system dpkg database
-echo "[6d/8] Building OTA Debian packages and installing base nebula-desktop..."
+if [ -z "${DEB_VERSION:-}" ] && [ "$SYS_CHANNEL" = "delta" ] && [ -n "${DELTA_REV:-}" ]; then
+    export DEB_VERSION="${BASE_V:-26.0.1}~rev${DELTA_REV}"
+fi
 bash "${ROOT_DIR}/scripts/build_ota_deb.sh"
 DEB_FILE="$(ls -1 "${ROOT_DIR}/build/debs"/nebula-desktop_*_all.deb 2>/dev/null | head -1)"
 if [ -n "${DEB_FILE}" ] && [ -f "${DEB_FILE}" ]; then

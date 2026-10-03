@@ -566,9 +566,11 @@ class MyNebulaPanel(SettingsPanel):
         notif_row, _ = create_switch_row("Notification Mirroring", "Receive phone alerts directly on the desktop", active=True)
         feat_grp.add(notif_row)
 
+        self._last_paired_name = "UNSET"
         self._check_pairing_status()
         self._load_pairing_info()
         self._update_gallery_sync_ui()
+        GLib.timeout_add_seconds(1, self._periodic_pairing_check)
         GLib.timeout_add_seconds(3, lambda: (self._update_gallery_sync_ui(), True)[1])
 
     def _on_gallery_sync_toggled(self, active):
@@ -684,40 +686,47 @@ class MyNebulaPanel(SettingsPanel):
 
         threading.Thread(target=_fetch, daemon=True).start()
 
+    def _periodic_pairing_check(self):
+        self._check_pairing_status()
+        return True
+
     def _check_pairing_status(self):
         def _task():
             paired_name = None
-            # Check local file state
-            pairing_files = [
-                os.path.expanduser("~/.config/nebula/companion_pairing.json"),
-                os.path.expanduser("~/.config/nebula/mynebula_pairing.json")
-            ]
-            for pf in pairing_files:
-                if os.path.exists(pf):
-                    try:
-                        with open(pf, "r") as f:
-                            data = json.load(f)
-                        pdev = data.get("paired_device")
-                        if pdev and isinstance(pdev, dict) and pdev.get("name"):
-                            paired_name = pdev.get("name")
-                            break
-                    except Exception:
-                        pass
+            api_ok = False
+            try:
+                import urllib.request
+                req = urllib.request.Request("http://127.0.0.1:53317/api/status", headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=1.0) as resp:
+                    sdata = json.loads(resp.read().decode())
+                    api_ok = True
+                    if sdata.get("is_paired"):
+                        paired_name = sdata.get("paired_device_name") or "Android Device"
+                    else:
+                        paired_name = None
+            except Exception:
+                pass
 
-            # Also query companion status API
-            if not paired_name:
-                try:
-                    import urllib.request
-                    req = urllib.request.Request("http://127.0.0.1:53317/api/status", headers={"Content-Type": "application/json"})
-                    with urllib.request.urlopen(req, timeout=1.5) as resp:
-                        sdata = json.loads(resp.read().decode())
-                        pdev = sdata.get("paired_device")
-                        if pdev and isinstance(pdev, dict) and pdev.get("name"):
-                            paired_name = pdev.get("name")
-                except Exception:
-                    pass
+            if not api_ok:
+                pairing_files = [
+                    os.path.expanduser("~/.config/nebula/companion_pairing.json"),
+                    os.path.expanduser("~/.config/nebula/mynebula_pairing.json")
+                ]
+                for pf in pairing_files:
+                    if os.path.exists(pf):
+                        try:
+                            with open(pf, "r") as f:
+                                data = json.load(f)
+                            pdev = data.get("paired_device")
+                            if pdev and isinstance(pdev, dict) and pdev.get("name"):
+                                paired_name = pdev.get("name")
+                                break
+                        except Exception:
+                            pass
 
             def _update():
+                state_changed = (getattr(self, "_last_paired_name", "UNSET") != paired_name)
+                self._last_paired_name = paired_name
                 if paired_name:
                     self.pairing_row.set_title(f"Associato con {paired_name}")
                     self.pairing_row.set_subtitle("Device connected and ready for synchronization")
@@ -726,6 +735,9 @@ class MyNebulaPanel(SettingsPanel):
                     self.pairing_row.set_title("Associato con nessun dispositivo")
                     self.pairing_row.set_subtitle("Open MyNebula on Android on your Wi-Fi network to connect")
                     self.btn_unpair.set_visible(False)
+
+                if state_changed:
+                    self._load_pairing_info()
                 return GLib.SOURCE_REMOVE
 
             GLib.idle_add(_update)
@@ -1629,13 +1641,22 @@ class UpdatePanel(SettingsPanel):
                     pass
 
         if not ver:
-            ver = "26.0 \"Apollo\""
+            ver = "26.0.1 (Apollo)"
 
-        if current_rev is not None and "rev" not in ver.lower():
-            clean = ver.replace('"Apollo"', '').strip()
-            ver = f"{clean}-delta.rev{current_rev} \"Apollo\""
+        # Clean out escaped quotes or stray quotes
+        ver_clean = ver.replace('\\"', '').replace('"', '').strip()
+        base_ver = re.sub(r'[\(\[]?\s*apollo\s*[\)\]]?', '', ver_clean, flags=re.I).strip()
 
-        return ver
+        rev_match = re.search(r'rev(\d+)', base_ver, re.I)
+        if rev_match:
+            r_num = int(rev_match.group(1))
+            clean_base = re.sub(r'[-~]?(delta\.?)?rev\d+', '', base_ver, flags=re.I).strip()
+            return f"{clean_base}-delta.rev{r_num} (Apollo)"
+        elif current_rev is not None:
+            clean_base = re.sub(r'[-~]?(delta\.?)?rev\d+', '', base_ver, flags=re.I).strip()
+            return f"{clean_base}-delta.rev{current_rev} (Apollo)"
+
+        return f"{base_ver} (Apollo)" if base_ver else "26.0.1 (Apollo)"
 
     def _extract_delta_rev(self, ver_str):
         # Match rev<N> or -rev<N> or .rev<N>
@@ -1688,17 +1709,52 @@ class UpdatePanel(SettingsPanel):
 
         def _task():
             import urllib.request
+            import xml.etree.ElementTree as ET
             target_release = None
             error_msg = None
+            releases = []
 
+            # 1. Try GitHub REST API
             try:
                 req = urllib.request.Request(
                     self.GITHUB_API_RELEASES,
-                    headers={"User-Agent": "NebulaOS-Updater/26.0", "Accept": "application/vnd.github.v3+json"}
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 NebulaOS/26.0",
+                        "Accept": "application/vnd.github.v3+json"
+                    }
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
+                with urllib.request.urlopen(req, timeout=12) as resp:
                     releases = json.loads(resp.read().decode())
+            except Exception as api_err:
+                # 2. Fallback to GitHub Releases Atom Feed (bypasses REST API rate limits)
+                try:
+                    atom_req = urllib.request.Request(
+                        "https://github.com/tnuproject/nebulaos/releases.atom",
+                        headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
+                    )
+                    with urllib.request.urlopen(atom_req, timeout=12) as atom_resp:
+                        root = ET.fromstring(atom_resp.read())
+                    ns = {"atom": "http://www.w3.org/2005/Atom"}
+                    for entry in root.findall("atom:entry", ns):
+                        title = entry.find("atom:title", ns)
+                        t_text = title.text if title is not None else ""
+                        links = entry.findall("atom:link", ns)
+                        href = links[0].attrib.get("href", "") if links else ""
+                        tag = href.split("/")[-1] if href else ""
+                        clean_tag = tag[1:] if tag.startswith("v") else tag
+                        deb_name = f"nebulaos-ota-{clean_tag}.deb"
+                        deb_url = f"https://github.com/tnuproject/nebulaos/releases/download/{tag}/{deb_name}"
+                        releases.append({
+                            "tag_name": tag,
+                            "name": t_text,
+                            "body": "NebulaOS System Update",
+                            "prerelease": "delta" in tag.lower(),
+                            "assets": [{"name": deb_name, "browser_download_url": deb_url}]
+                        })
+                except Exception as atom_err:
+                    error_msg = f"GitHub unreachable: {api_err}"
 
+            if releases:
                 for r in releases:
                     if r.get("draft"):
                         continue
@@ -1721,13 +1777,11 @@ class UpdatePanel(SettingsPanel):
                         if not is_prerelease and "delta" not in rel_tag and "delta" not in rel_name:
                             target_release = r
                             break
-            except Exception as e:
-                error_msg = str(e)
 
             def _done():
                 self.btn_check.set_sensitive(True)
-                if error_msg:
-                    self.status_lbl.set_text("Offline or GitHub unreachable")
+                if error_msg and not target_release:
+                    self.status_lbl.set_text(error_msg if len(error_msg) < 50 else "Offline or GitHub unreachable")
                     return GLib.SOURCE_REMOVE
 
                 if not target_release:
@@ -1746,6 +1800,13 @@ class UpdatePanel(SettingsPanel):
                     if aname.endswith(".deb") or "ota" in aname.lower() or aname.endswith(".tar.gz"):
                         ota_asset = a
                         break
+
+                # If no asset listed (e.g. from Atom feed), synthesize standard deb download URL
+                if not ota_asset and rel_tag:
+                    clean_tag = rel_tag[1:] if rel_tag.startswith("v") else rel_tag
+                    deb_name = f"nebulaos-ota-{clean_tag}.deb"
+                    deb_url = f"https://github.com/tnuproject/nebulaos/releases/download/{rel_tag}/{deb_name}"
+                    ota_asset = {"name": deb_name, "browser_download_url": deb_url}
 
                 has_update = self._is_newer_version(rel_tag + " " + rel_name, self.current_version)
 
@@ -1793,35 +1854,58 @@ class UpdatePanel(SettingsPanel):
             tmp_dir = "/tmp/nebula_ota_install"
             os.makedirs(tmp_dir, exist_ok=True)
             dest_file = os.path.join(tmp_dir, ota_filename)
+            err_detail = ""
 
             try:
-                # Download
-                urllib.request.urlretrieve(ota_url, dest_file)
+                # Download with explicit headers to avoid 403 user-agent blocks
+                dl_req = urllib.request.Request(
+                    ota_url,
+                    headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
+                )
+                with urllib.request.urlopen(dl_req, timeout=120) as resp:
+                    with open(dest_file, "wb") as f_out:
+                        while chunk := resp.read(65536):
+                            f_out.write(chunk)
 
                 # Execute installation via pkexec
                 if dest_file.endswith(".deb"):
-                    cmd = f"pkexec bash -c 'dpkg -i {dest_file} || apt-get install -f -y; rm -f {dest_file}'"
+                    # Use apt-get install directly or dpkg -i with dependency auto-fix
+                    cmd = f"pkexec bash -c 'apt-get install -y --allow-downgrades {dest_file} 2>&1 || (dpkg -i {dest_file} && apt-get install -f -y) 2>&1; rm -f {dest_file}'"
                 elif dest_file.endswith(".tar.gz") or dest_file.endswith(".tgz"):
                     cmd = f"pkexec bash -c 'tar -xzf {dest_file} -C / && rm -f {dest_file}'"
                 else:
-                    cmd = f"pkexec bash -c 'dpkg -i {dest_file}'"
+                    cmd = f"pkexec bash -c 'apt-get install -y --allow-downgrades {dest_file} 2>&1 || dpkg -i {dest_file}; rm -f {dest_file}'"
 
                 proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 success = (proc.returncode == 0)
-            except Exception:
+                if not success:
+                    err_detail = (proc.stderr or proc.stdout or "").strip()
+            except Exception as e:
                 success = False
+                err_detail = str(e)
 
             def _finish():
                 self.btn_check.set_sensitive(True)
                 if success:
-                    self.status_lbl.set_text("System updated successfully! Restart to apply all changes.")
+                    self.current_version = self._detect_current_version()
+                    self.status_lbl.set_text(f"System updated successfully to {self.current_version}! Restart to apply all changes.")
                     self.btn_install.set_visible(False)
+                    self.details_grp.set_visible(False)
                     try:
-                        subprocess.Popen(["notify-send", "-a", "NebulaOS Update", "System Updated", "NebulaOS system update applied successfully."])
+                        win = self.get_root()
+                        if win and hasattr(win, "panels") and "about" in win.panels:
+                            _, about_inst, _ = win.panels["about"]
+                            if about_inst and hasattr(about_inst, "refresh"):
+                                about_inst.refresh()
+                    except Exception:
+                        pass
+                    try:
+                        subprocess.Popen(["notify-send", "-a", "NebulaOS Update", "System Updated", f"NebulaOS updated to {self.current_version}."])
                     except Exception:
                         pass
                 else:
-                    self.status_lbl.set_text("Update installation failed or cancelled.")
+                    short_err = f"Update failed: {err_detail[:40]}..." if err_detail else "Update installation failed or cancelled."
+                    self.status_lbl.set_text(short_err)
                     self.btn_install.set_sensitive(True)
                 return GLib.SOURCE_REMOVE
 
@@ -1843,27 +1927,11 @@ class AboutPanel(SettingsPanel):
         logo.set_pixel_size(84)
         banner_box.append(logo)
 
-        os_info = {"NAME": "NebulaOS", "VERSION": "26.0 (Apollo)", "PRETTY_NAME": "NebulaOS 26.0 (Apollo)"}
-        if os.path.exists("/etc/os-release"):
-            try:
-                with open("/etc/os-release", "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if "=" in line and not line.startswith("#"):
-                            k, v = line.split("=", 1)
-                            os_info[k] = v.strip('"\'')
-            except Exception:
-                pass
+        self.os_title = Gtk.Label(label="NebulaOS", css_classes=["title-1"])
+        banner_box.append(self.os_title)
 
-        arch = os.uname().machine if hasattr(os, "uname") else "x86_64"
-        display_name = os_info.get("NAME", "NebulaOS")
-        version_str = os_info.get("VERSION", os_info.get("VERSION_ID", "26.0 (Apollo)"))
-
-        os_title = Gtk.Label(label=display_name, css_classes=["title-1"])
-        banner_box.append(os_title)
-
-        os_sub = Gtk.Label(label=f"Version {version_str} ({arch})", css_classes=["dim-label"])
-        banner_box.append(os_sub)
+        self.os_sub = Gtk.Label(label="", css_classes=["dim-label"])
+        banner_box.append(self.os_sub)
 
         top_grp = Adw.PreferencesGroup()
         top_grp.add(banner_box)
@@ -1872,6 +1940,9 @@ class AboutPanel(SettingsPanel):
         # Hardware & Specs
         hw_grp = Adw.PreferencesGroup(title="Hardware and System Specifications")
         self.add(hw_grp)
+
+        self.version_row = create_action_row("OS Version", "", "help-about-symbolic")
+        hw_grp.add(self.version_row)
 
         cpu_name = "Unknown Processor"
         try:
@@ -1898,6 +1969,58 @@ class AboutPanel(SettingsPanel):
 
         kernel_str = run_cmd(["uname", "-r"])
         hw_grp.add(create_action_row("Linux Kernel", kernel_str, "application-x-executable-symbolic"))
+
+        self.refresh()
+
+    def refresh(self):
+        os_info = {"NAME": "NebulaOS", "VERSION": "26.0.1 (Apollo)", "PRETTY_NAME": "NebulaOS 26.0.1 (Apollo)"}
+        for path in ["/etc/os-release", "/usr/lib/os-release"]:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r") as f:
+                        for line in f:
+                            line = line.strip()
+                            if "=" in line and not line.startswith("#"):
+                                k, v = line.split("=", 1)
+                                clean_v = v.strip('"\'').replace('\\"', '').replace('"', '').strip()
+                                os_info[k] = clean_v
+                    break
+                except Exception:
+                    pass
+
+        current_rev = None
+        for rev_file in ["/etc/nebula/delta_rev", "/usr/share/nebula/delta_rev", "src/release/delta_rev"]:
+            if os.path.exists(rev_file):
+                try:
+                    with open(rev_file, "r") as f:
+                        txt = f.read().strip()
+                        if txt.isdigit():
+                            current_rev = int(txt)
+                            break
+                except Exception:
+                    pass
+
+        raw_ver = os_info.get("VERSION", os_info.get("VERSION_ID", "26.0.1"))
+        raw_ver = raw_ver.replace('\\"', '').replace('"', '').strip()
+        base_ver = re.sub(r'[\(\[]?\s*apollo\s*[\)\]]?', '', raw_ver, flags=re.I).strip()
+
+        rev_match = re.search(r'rev(\d+)', base_ver, re.I)
+        if rev_match:
+            detected_rev = int(rev_match.group(1))
+            clean_base = re.sub(r'[-~]?(delta\.?)?rev\d+', '', base_ver, flags=re.I).strip()
+            version_str = f"{clean_base}-delta.rev{detected_rev} (Apollo)"
+        elif current_rev is not None:
+            clean_base = re.sub(r'[-~]?(delta\.?)?rev\d+', '', base_ver, flags=re.I).strip()
+            version_str = f"{clean_base}-delta.rev{current_rev} (Apollo)"
+        else:
+            version_str = f"{base_ver} (Apollo)" if base_ver else "26.0.1 (Apollo)"
+
+        arch = os.uname().machine if hasattr(os, "uname") else "x86_64"
+        display_name = os_info.get("NAME", "NebulaOS")
+        self.os_title.set_label(display_name)
+        self.os_sub.set_label(f"Version {version_str} ({arch})")
+        if hasattr(self, "version_row"):
+            self.version_row.set_subtitle(f"NebulaOS {version_str}")
 
 
 # ── Main Settings Window ─────────────────────────────────────────────────────
@@ -2107,6 +2230,8 @@ class SettingsWindow(Adw.ApplicationWindow):
             instance.build_ui()
             self.stack.add_named(instance, tag)
             self.panels[tag] = (panel_cls, instance, title)
+        elif hasattr(instance, "refresh"):
+            instance.refresh()
 
         self.stack.set_visible_child_name(tag)
         self.content_header.set_title_widget(Gtk.Label(label=title))

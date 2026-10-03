@@ -141,6 +141,32 @@ class GalleryWindow(Adw.ApplicationWindow):
         self._build_viewer_view()
         self._build_editor_view()
 
+        # Inject CSS for seamless edge-to-edge square grid (macOS/iOS Photos style)
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+        .gallery-grid flowboxchild {
+            padding: 0px !important;
+            margin: 1px !important;
+            border-radius: 0px !important;
+        }
+        .gallery-square-card {
+            padding: 0px !important;
+            margin: 0px !important;
+            border: none !important;
+            border-radius: 0px !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+        .gallery-square-card:hover {
+            opacity: 0.9;
+        }
+        """)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
         self.show_grid()
         self._load_photos()
 
@@ -198,15 +224,17 @@ class GalleryWindow(Adw.ApplicationWindow):
 
         self.flowbox = Gtk.FlowBox()
         self.flowbox.set_valign(Gtk.Align.START)
-        self.flowbox.set_max_children_per_line(8)
+        self.flowbox.set_max_children_per_line(30)
         self.flowbox.set_min_children_per_line(2)
         self.flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
         self.flowbox.set_homogeneous(True)
-        self.flowbox.set_column_spacing(16)
-        self.flowbox.set_row_spacing(16)
-        self.flowbox.set_margin_start(24)
-        self.flowbox.set_margin_end(24)
-        self.flowbox.set_margin_bottom(24)
+        self.flowbox.set_column_spacing(2)
+        self.flowbox.set_row_spacing(2)
+        self.flowbox.set_margin_start(0)
+        self.flowbox.set_margin_end(0)
+        self.flowbox.set_margin_top(0)
+        self.flowbox.set_margin_bottom(0)
+        self.flowbox.add_css_class("gallery-grid")
 
         scroll.set_child(self.flowbox)
         grid_box.append(scroll)
@@ -420,11 +448,12 @@ class GalleryWindow(Adw.ApplicationWindow):
         for idx, path in enumerate(self.photos):
             card = Gtk.Button()
             card.add_css_class("flat")
+            card.add_css_class("gallery-square-card")
             card.set_size_request(160, 160)
 
             pic = Gtk.Picture.new_for_filename(path)
             pic.set_content_fit(Gtk.ContentFit.COVER)
-            pic.set_size_request(150, 150)
+            pic.set_size_request(160, 160)
             card.set_child(pic)
 
             card.connect("clicked", lambda _, i=idx: self._open_photo(i))
@@ -432,6 +461,23 @@ class GalleryWindow(Adw.ApplicationWindow):
 
     def _open_photo(self, idx):
         self.current_idx = idx
+        self.show_viewer()
+
+    def open_file(self, file_path):
+        if not file_path:
+            return
+        if file_path.startswith("file://"):
+            import urllib.parse
+            file_path = urllib.parse.unquote(urllib.parse.urlparse(file_path).path)
+        abs_path = os.path.abspath(file_path)
+        if not os.path.exists(abs_path):
+            return
+        # If photo is not in self.photos, prepend it
+        if abs_path not in self.photos:
+            self.photos.insert(0, abs_path)
+            self.current_idx = 0
+        else:
+            self.current_idx = self.photos.index(abs_path)
         self.show_viewer()
 
     def _share_current_photo(self, _):
@@ -544,17 +590,46 @@ class GalleryWindow(Adw.ApplicationWindow):
                     pass
 
 def main():
-    _wizard_done = os.path.exists(os.path.expanduser("~/.config/nebula/postinstall-wizard-completed")) or os.path.exists("/run/nebula-desktop-unlocked")
-    if not _wizard_done:
-        sys.exit(0)
-
     GLib.set_prgname("org.nebulaos.Gallery")
     GLib.set_application_name("Gallery")
-    app = Adw.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.NON_UNIQUE)
+    app = Adw.Application(
+        application_id=APP_ID,
+        flags=Gio.ApplicationFlags.HANDLES_OPEN
+    )
+
     def on_activate(a):
-        win = GalleryWindow(a)
+        win = a.get_active_window()
+        if not win:
+            win = GalleryWindow(a)
+        # Check command line args if any image files were passed
+        args = sys.argv[1:]
+        opened = False
+        for arg in args:
+            if not arg.startswith("-"):
+                target = arg
+                if target.startswith("file://"):
+                    import urllib.parse
+                    target = urllib.parse.unquote(urllib.parse.urlparse(target).path)
+                if os.path.isfile(target):
+                    win.open_file(target)
+                    opened = True
+                    break
+        if not opened and win.stack.get_visible_child_name() != "viewer":
+            win.show_grid()
         win.present()
+
+    def on_open(a, files, hint):
+        win = a.get_active_window()
+        if not win:
+            win = GalleryWindow(a)
+        if files:
+            path = files[0].get_path()
+            if path:
+                win.open_file(path)
+        win.present()
+
     app.connect("activate", on_activate)
+    app.connect("open", on_open)
     return app.run(sys.argv)
 
 if __name__ == "__main__":

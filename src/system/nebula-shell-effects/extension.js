@@ -1664,11 +1664,14 @@ function enable() {
             });
 
             let qs = Main.panel.statusArea.quickSettings;
-            if (qs.addItem) {
+            let menu = (qs && qs.menu) ? qs.menu : qs;
+            if (menu && menu.addItem) {
+                menu.addItem(_petalDropToggle, 2);
+            } else if (qs && qs.addItem) {
                 qs.addItem(_petalDropToggle, 2);
-            } else if (qs.menu && qs.menu.addItem) {
-                qs.menu.addItem(_petalDropToggle, 2);
-            } else if (qs._grid) {
+            } else if (menu && menu._grid) {
+                menu._grid.add_child(_petalDropToggle);
+            } else if (qs && qs._grid) {
                 qs._grid.add_child(_petalDropToggle);
             }
         }

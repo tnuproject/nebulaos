@@ -43,6 +43,11 @@ EOF
 #!/bin/sh
 set -e
 
+PKG_VER="@PKG_VERSION@"
+if [ -z "$PKG_VER" ] || [ "$PKG_VER" = "@PKG_VERSION@" ]; then
+    PKG_VER="$(dpkg-query -W -f='${Version}' nebula-desktop 2>/dev/null || echo '')"
+fi
+
 # Compile schemas
 if [ -x /usr/bin/glib-compile-schemas ]; then
     /usr/bin/glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
@@ -60,9 +65,53 @@ for theme in Nebula hicolor Adwaita; do
     fi
 done
 
-# Set OS logo in os-release
+# Ensure system metadata directories exist
+mkdir -p /etc/nebula /usr/share/nebula /var/lib/nebulaos
+
+# Extract version and delta revision from installed package version
+if echo "$PKG_VER" | grep -qi "rev"; then
+    REV_NUM="$(echo "$PKG_VER" | sed -E 's/.*rev([0-9]+).*/\1/')"
+    BASE_V="$(echo "$PKG_VER" | sed -E 's/[~-](delta\.?)?rev[0-9]+.*//')"
+    [ -z "$BASE_V" ] && BASE_V="26.0.1"
+    NEW_VER="${BASE_V}-delta.rev${REV_NUM}"
+    NEW_CHANNEL="delta"
+    echo "${REV_NUM}" > /etc/nebula/delta_rev
+    echo "${REV_NUM}" > /usr/share/nebula/delta_rev
+    echo "delta" > /etc/nebula/channel
+    echo "delta" > /usr/share/nebula/channel
+else
+    BASE_V="$(echo "$PKG_VER" | sed -E 's/[~-].*//')"
+    [ -z "$BASE_V" ] && BASE_V="26.0.1"
+    NEW_VER="${BASE_V}"
+    NEW_CHANNEL="stable"
+    rm -f /etc/nebula/delta_rev /usr/share/nebula/delta_rev 2>/dev/null || true
+    echo "stable" > /etc/nebula/channel
+    echo "stable" > /usr/share/nebula/channel
+fi
+
+# Update /etc/os-release and /usr/lib/os-release with new revision and version
 for osf in /etc/os-release /usr/lib/os-release; do
     if [ -f "$osf" ]; then
+        if grep -q "^VERSION=" "$osf"; then
+            sed -i "s/^VERSION=.*/VERSION=\"${NEW_VER} (Apollo)\"/" "$osf"
+        else
+            echo "VERSION=\"${NEW_VER} (Apollo)\"" >> "$osf"
+        fi
+        if grep -q "^VERSION_ID=" "$osf"; then
+            sed -i "s/^VERSION_ID=.*/VERSION_ID=\"${NEW_VER}\"/" "$osf"
+        else
+            echo "VERSION_ID=\"${NEW_VER}\"" >> "$osf"
+        fi
+        if grep -q "^PRETTY_NAME=" "$osf"; then
+            sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"NebulaOS ${NEW_VER} (Apollo)\"/" "$osf"
+        else
+            echo "PRETTY_NAME=\"NebulaOS ${NEW_VER} (Apollo)\"" >> "$osf"
+        fi
+        if grep -q "^BUILD_CHANNEL=" "$osf"; then
+            sed -i "s/^BUILD_CHANNEL=.*/BUILD_CHANNEL=${NEW_CHANNEL}/" "$osf"
+        else
+            echo "BUILD_CHANNEL=${NEW_CHANNEL}" >> "$osf"
+        fi
         if grep -q "^LOGO=" "$osf"; then
             sed -i 's/^LOGO=.*/LOGO=nebulaos-symbol/' "$osf"
         else
@@ -71,13 +120,28 @@ for osf in /etc/os-release /usr/lib/os-release; do
     fi
 done
 
-# Ensure mime associations for .desktop launcher
-for mf in /etc/xdg/mimeapps.list /usr/share/applications/mimeapps.list; do
+# Ensure mime associations for .desktop launcher and nebula-gallery
+for mf in /etc/xdg/mimeapps.list /usr/share/applications/mimeapps.list /etc/skel/.config/mimeapps.list /home/*/.config/mimeapps.list; do
     if [ -f "$mf" ]; then
         if ! grep -q "application/x-desktop" "$mf"; then
             sed -i '/\[Default Applications\]/a application/x-desktop=nebula-desktop-launcher.desktop' "$mf" 2>/dev/null || true
             sed -i '/\[Added Associations\]/a application/x-desktop=nebula-desktop-launcher.desktop;' "$mf" 2>/dev/null || true
         fi
+        for img_mime in image/jpeg image/png image/webp image/gif image/bmp image/svg+xml image/tiff; do
+            sed -i "s|^${img_mime}=.*|${img_mime}=nebula-gallery.desktop|g" "$mf" 2>/dev/null || true
+            if ! grep -q "^${img_mime}=" "$mf"; then
+                sed -i "/\[Default Applications\]/a ${img_mime}=nebula-gallery.desktop" "$mf" 2>/dev/null || true
+                sed -i "/\[Added Associations\]/a ${img_mime}=nebula-gallery.desktop;" "$mf" 2>/dev/null || true
+            fi
+        done
+    fi
+done
+
+# Ensure MyNebula is hidden from App Grid
+for md in /usr/share/applications/mynebula.desktop /usr/local/share/applications/mynebula.desktop; do
+    if [ -f "$md" ]; then
+        sed -i '/^NoDisplay=/d' "$md" 2>/dev/null || true
+        echo "NoDisplay=true" >> "$md"
     fi
 done
 
@@ -106,12 +170,12 @@ fi
 rm -rf /home/*/.cache/thumbnails/ 2>/dev/null || true
 
 # Record OTA update pending for first-boot notification
-mkdir -p /var/lib/nebulaos
-echo "${PKG_VERSION}" > /var/lib/nebulaos/ota_update_pending
+echo "${NEW_VER}" > /var/lib/nebulaos/ota_update_pending
 chmod 666 /var/lib/nebulaos/ota_update_pending 2>/dev/null || true
 
 exit 0
 EOF
+    sed -i "s|@PKG_VERSION@|${PKG_VERSION}|g" "${PKG_STAGE}/DEBIAN/postinst"
     chmod 755 "${PKG_STAGE}/DEBIAN/postinst"
 
     # Copy files
@@ -153,6 +217,11 @@ echo "=== [1/3] Building nebula-desktop debian package ==="
 if [ -z "${DEB_VERSION:-}" ]; then
     source "${ROOT_DIR}/src/release/release.conf"
     DEB_VERSION="${VERSION}"
+    CURRENT_CHANNEL="${BUILD_CHANNEL:-${CHANNEL:-}}"
+    if [ "${CURRENT_CHANNEL}" = "delta" ] && [ -f "${ROOT_DIR}/src/release/delta_rev" ]; then
+        DELTA_REV="$(cat "${ROOT_DIR}/src/release/delta_rev" | tr -d '[:space:]')"
+        [ -n "${DELTA_REV}" ] && DEB_VERSION="${VERSION}~rev${DELTA_REV}"
+    fi
 fi
 build_deb "${DEB_VERSION}"
 

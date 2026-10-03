@@ -54,6 +54,56 @@ def get_local_ip():
     return ip
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Current Linux User & PetalDrop Visibility State
+# ─────────────────────────────────────────────────────────────────────────────
+def get_current_user_name():
+    try:
+        import getpass
+        u = getpass.getuser()
+        if u and u not in ["root"]:
+            return u
+    except Exception:
+        pass
+    for env_var in ["USER", "LOGNAME", "USERNAME"]:
+        u = os.environ.get(env_var)
+        if u and u not in ["root"]:
+            return u
+    return "nebula"
+
+VISIBILITY_FILE = os.path.expanduser("~/.config/nebula/petaldrop_visibility.json")
+
+class PetalDropVisibilityManager:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.visible = True
+        self._load()
+
+    def _load(self):
+        if os.path.exists(VISIBILITY_FILE):
+            try:
+                with open(VISIBILITY_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.visible = bool(data.get("visible", True))
+            except Exception:
+                pass
+
+    def is_visible(self):
+        with self.lock:
+            return self.visible
+
+    def set_visible(self, val):
+        with self.lock:
+            self.visible = bool(val)
+            try:
+                os.makedirs(os.path.dirname(VISIBILITY_FILE), exist_ok=True)
+                with open(VISIBILITY_FILE, "w", encoding="utf-8") as f:
+                    json.dump({"visible": self.visible}, f)
+            except Exception:
+                pass
+
+drop_visibility_mgr = PetalDropVisibilityManager()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Pairing State
 # ─────────────────────────────────────────────────────────────────────────────
 class PairingManager:
@@ -70,7 +120,7 @@ class PairingManager:
                 pass
         token = f"NB-{int(time.time()) % 1000000:06d}"
         return {
-            "device_name": socket.gethostname(),
+            "device_name": get_current_user_name(),
             "pairing_token": token,
             "paired_device": None
         }
@@ -83,7 +133,8 @@ class PairingManager:
     def get_status(self):
         with self.lock:
             return {
-                "device_name": self.data.get("device_name", socket.gethostname()),
+                "device_name": get_current_user_name(),
+                "hostname": socket.gethostname(),
                 "local_ip": get_local_ip(),
                 "port": PORT,
                 "pairing_token": self.data.get("pairing_token"),
@@ -104,10 +155,13 @@ class PairingManager:
                     self.save()
                     return True, current["secret"]
                 else:
-                    return False, "Already paired with another device. Unpair it first from that device."
+                    return False, "This computer is already paired with another device. Unpair it first."
 
-            if token and token != self.data.get("pairing_token"):
-                return False, "Invalid pairing token"
+            # Strictly enforce PIN verification
+            expected_token = (self.data.get("pairing_token") or "").strip().upper()
+            provided_token = (token or "").strip().upper()
+            if not provided_token or provided_token != expected_token:
+                return False, "Invalid pairing PIN. Enter the PIN code shown on your PC screen."
 
             sec = phone_secret or hashlib.sha256(f"{device_id}-{time.time()}".encode()).hexdigest()[:32]
             self.data["paired_device"] = {
@@ -121,15 +175,37 @@ class PairingManager:
         return True, sec
 
     def unpair(self, phone_secret=None, is_local=False):
+        old_ip = None
         with self.lock:
             current = self.data.get("paired_device")
             if not current:
                 return True, "No device paired"
             if not is_local and phone_secret and current.get("secret") != phone_secret:
                 return False, "Unauthorized unpair request"
+            old_ip = current.get("last_ip")
             self.data["paired_device"] = None
             self.data["pairing_token"] = f"NB-{int(time.time()) % 1000000:06d}"
         self.save()
+
+        # Queue unpair event for real-time mobile polling
+        with phone_events_lock:
+            phone_events.append({"action": "unpair", "timestamp": time.time()})
+
+        # Immediately notify phone HTTP listener if IP was known
+        if old_ip and is_local:
+            def _notify_phone_unpair(ip):
+                try:
+                    import urllib.request
+                    req = urllib.request.Request(
+                        f"http://{ip}:53319/unpair",
+                        data=b'{"action":"unpair"}',
+                        headers={"Content-Type": "application/json"}
+                    )
+                    urllib.request.urlopen(req, timeout=2)
+                except Exception:
+                    pass
+            threading.Thread(target=_notify_phone_unpair, args=(old_ip,), daemon=True).start()
+
         return True, "Unpaired successfully"
 
 pairing_mgr = PairingManager()
@@ -439,7 +515,7 @@ class GallerySyncManager:
         phone_url = f"http://{phone_ip}:53319/gallery/manifest"
         req = urllib.request.Request(phone_url)
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 phone_data = json.loads(resp.read().decode())
         except Exception as e:
             with self.lock:
@@ -617,18 +693,19 @@ def start_discovery():
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         while True:
             try:
-                status = pairing_mgr.get_status()
-                msg = json.dumps({
-                    "type": "petaldrop_beacon",
-                    "device_name": status["device_name"],
-                    "ip": status["local_ip"],
-                    "port": PORT,
-                    "is_laptop": True,
-                    "pairing_token": status.get("pairing_token"),
-                    "is_paired": status.get("is_paired"),
-                    "paired_device_id": status.get("paired_device_id")
-                }).encode()
-                sock.sendto(msg, ('<broadcast>', BEACON_PORT))
+                if drop_visibility_mgr.is_visible():
+                    status = pairing_mgr.get_status()
+                    msg = json.dumps({
+                        "type": "petaldrop_beacon",
+                        "device_name": get_current_user_name(),
+                        "hostname": socket.gethostname(),
+                        "ip": status["local_ip"],
+                        "port": PORT,
+                        "is_laptop": True,
+                        "is_phone": False,
+                        "visible": True
+                    }).encode()
+                    sock.sendto(msg, ('<broadcast>', BEACON_PORT))
             except Exception:
                 pass
             time.sleep(3)
@@ -649,12 +726,16 @@ def start_discovery():
                     # Don't list ourselves
                     if peer_ip == get_local_ip() and payload.get("port") == PORT:
                         continue
+                    if payload.get("visible") is False:
+                        continue
                     with peers_lock:
                         discovered_peers[peer_ip] = {
                             "name": payload.get("device_name", "Unknown Device"),
+                            "hostname": payload.get("hostname", ""),
                             "ip": peer_ip,
                             "port": payload.get("port", PORT),
                             "is_laptop": payload.get("is_laptop", False),
+                            "is_phone": payload.get("is_phone", not payload.get("is_laptop", False)),
                             "last_seen": time.time()
                         }
             except Exception:
@@ -1293,20 +1374,39 @@ class CompanionHandler(BaseHTTPRequestHandler):
                 while chunk := f.read(65536):
                     self.wfile.write(chunk)
 
+        elif path == "/api/drop/visibility":
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"visible": drop_visibility_mgr.is_visible()}).encode())
+
         elif path == "/api/drop/peers":
             now = time.time()
             with peers_lock:
-                # Remove peers not seen in last 12 seconds
-                active = [p for p in discovered_peers.values() if now - p["last_seen"] < 12]
-            
-            # If a phone is paired, always prioritize / include it
+                active = [dict(p) for p in discovered_peers.values() if now - p["last_seen"] < 15]
+
             status = pairing_mgr.get_status()
-            if status["is_paired"]:
-                active.insert(0, {
-                    "name": f"{status['paired_device_name']} (Paired)",
-                    "ip": "paired",
-                    "is_paired": True
-                })
+            paired_dev = pairing_mgr.data.get("paired_device") or {}
+            paired_ip = paired_dev.get("last_ip")
+
+            for p in active:
+                if status["is_paired"] and paired_ip and p.get("ip") == paired_ip:
+                    p["is_paired"] = True
+                else:
+                    p["is_paired"] = False
+
+            if status["is_paired"] and paired_ip:
+                found = any(p.get("ip") == paired_ip for p in active)
+                if not found:
+                    active.insert(0, {
+                        "name": status.get("paired_device_name") or "Paired Phone",
+                        "ip": paired_ip,
+                        "port": 53319,
+                        "is_laptop": False,
+                        "is_phone": True,
+                        "is_paired": True
+                    })
 
             self.send_response(200)
             self._send_cors()
@@ -1486,9 +1586,74 @@ class CompanionHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(400, str(e))
 
+        elif path == "/api/drop/visibility":
+            try:
+                data = json.loads(body.decode()) if body else {}
+                val = data.get("visible", True)
+                drop_visibility_mgr.set_visible(val)
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "visible": drop_visibility_mgr.is_visible()}).encode())
+            except Exception as e:
+                self.send_error(400, str(e))
+
         elif path == "/api/drop/receive":
             # Receiving a file from PetalDrop
+            client_ip = self.client_address[0]
+            status = pairing_mgr.get_status()
+            paired_dev = pairing_mgr.data.get("paired_device") or {}
+            paired_ip = paired_dev.get("last_ip")
+
+            is_paired_sender = (
+                client_ip in ["127.0.0.1", "localhost", "::1"] or
+                (status.get("is_paired") and paired_ip and client_ip == paired_ip)
+            )
+
             filename = self.headers.get("X-File-Name", f"received_{int(time.time())}.bin")
+            sender_name = self.headers.get("X-Sender-Name")
+            if not sender_name:
+                with peers_lock:
+                    peer_info = discovered_peers.get(client_ip, {})
+                    sender_name = peer_info.get("name") or client_ip
+
+            # If sender is NOT paired, require user approval (Accept / Decline)!
+            if not is_paired_sender:
+                file_size_mb = max(0.1, len(body) / (1024 * 1024))
+                prompt_text = (
+                    f"<b>{sender_name}</b> ({client_ip}) wants to send you a file via PetalDrop:\n\n"
+                    f"<b>{filename}</b> ({file_size_mb:.1f} MB)\n\n"
+                    f"Do you want to accept this transfer?"
+                )
+                try:
+                    res = subprocess.run(
+                        [
+                            "zenity", "--question",
+                            "--title=PetalDrop Transfer Request",
+                            f"--text={prompt_text}",
+                            "--ok-label=Accept",
+                            "--cancel-label=Decline",
+                            "--timeout=60"
+                        ],
+                        capture_output=True,
+                        text=True
+                    )
+                    if res.returncode != 0:
+                        self.send_response(403)
+                        self._send_cors()
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"success": False, "error": "Transfer declined by user"}).encode())
+                        try:
+                            subprocess.Popen(["notify-send", "-a", "PetalDrop", "-i", "dialog-warning-symbolic",
+                                              "PetalDrop Transfer Declined", f"Declined transfer of '{filename}' from {sender_name}."])
+                        except Exception:
+                            pass
+                        return
+                except Exception:
+                    pass
+
             save_dir = os.path.expanduser("~/Downloads")
             ext = os.path.splitext(filename)[1].lower()
             if ext in [".jpg", ".jpeg", ".png", ".webp", ".svg"]:
@@ -1515,7 +1680,7 @@ class CompanionHandler(BaseHTTPRequestHandler):
             # Notify user
             try:
                 subprocess.Popen(["notify-send", "-a", "PetalDrop", "-i", "document-send-symbolic",
-                                  "File received via PetalDrop", f"Saved: {os.path.basename(target_path)}"])
+                                  "File received via PetalDrop", f"Saved: {os.path.basename(target_path)} from {sender_name}"])
             except Exception:
                 pass
 
@@ -1551,9 +1716,13 @@ class CompanionHandler(BaseHTTPRequestHandler):
                 req = urllib.request.Request(
                     f"http://{target_ip}:{target_port}/api/drop/receive",
                     data=file_bytes,
-                    headers={"X-File-Name": filename, "Content-Type": "application/octet-stream"}
+                    headers={
+                        "X-File-Name": filename,
+                        "X-Sender-Name": get_current_user_name(),
+                        "Content-Type": "application/octet-stream"
+                    }
                 )
-                with urllib.request.urlopen(req, timeout=15) as resp:
+                with urllib.request.urlopen(req, timeout=30) as resp:
                     res_body = resp.read()
 
                 self.send_response(200)

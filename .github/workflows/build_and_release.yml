@@ -93,7 +93,7 @@ jobs:
             echo "RELEASE_TITLE=NebulaOS ${TARGET_VERSION} (Delta Channel)" >> $GITHUB_ENV
           else
             echo "IS_PRERELEASE=false" >> $GITHUB_ENV
-            echo "RELEASE_TITLE=NebulaOS ${TARGET_VERSION} \"Apollo\"" >> $GITHUB_ENV
+            echo "RELEASE_TITLE=NebulaOS ${TARGET_VERSION} (Apollo)" >> $GITHUB_ENV
           fi
 
       - name: Stamp System Version and Channel into Configuration
@@ -105,10 +105,10 @@ jobs:
           # Update sysroot os-release
           mkdir -p build/sysroot/etc
           cat <<EOF > build/sysroot/etc/os-release
-          PRETTY_NAME="NebulaOS ${RELEASE_VERSION} \"Apollo\""
+          PRETTY_NAME="NebulaOS ${RELEASE_VERSION} (Apollo)"
           NAME="NebulaOS"
           VERSION_ID="${RELEASE_VERSION}"
-          VERSION="${RELEASE_VERSION} \"Apollo\""
+          VERSION="${RELEASE_VERSION} (Apollo)"
           VERSION_CODENAME=apollo
           ID=nebulaos
           ID_LIKE=debian
