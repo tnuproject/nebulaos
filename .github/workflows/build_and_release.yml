@@ -129,8 +129,12 @@ jobs:
           # Run patch and build script
           sudo bash scripts/patch_and_rebuild_isos.sh
 
+          # Restore ownership of build outputs from root to runner user
+          sudo chown -R "$USER:$USER" build/output 2>/dev/null || true
+
           ISO_SRC="$(ls -1 build/output/NebulaOS-*.iso 2>/dev/null | head -1)"
           if [ -f "${ISO_SRC}" ]; then
+            mkdir -p release_assets
             ISO_DEST="release_assets/NebulaOS-${RELEASE_VERSION}-Apollo-x86_64.iso"
             mv "${ISO_SRC}" "${ISO_DEST}"
             echo "ISO Generated: ${ISO_DEST}"
