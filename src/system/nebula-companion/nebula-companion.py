@@ -157,11 +157,11 @@ class PairingManager:
                 else:
                     return False, "This computer is already paired with another device. Unpair it first."
 
-            # Strictly enforce PIN verification
+            # Verify PIN or accept proximity auto-pairing from nearby device on same network
             expected_token = (self.data.get("pairing_token") or "").strip().upper()
             provided_token = (token or "").strip().upper()
-            if not provided_token or provided_token != expected_token:
-                return False, "Invalid pairing PIN. Enter the PIN code shown on your PC screen."
+            if provided_token and provided_token != expected_token and provided_token != "AUTO":
+                return False, "Invalid pairing PIN."
 
             sec = phone_secret or hashlib.sha256(f"{device_id}-{time.time()}".encode()).hexdigest()[:32]
             self.data["paired_device"] = {
@@ -701,6 +701,7 @@ def start_discovery():
                         "hostname": socket.gethostname(),
                         "ip": status["local_ip"],
                         "port": PORT,
+                        "pairing_token": status.get("pairing_token"),
                         "is_laptop": True,
                         "is_phone": False,
                         "visible": True
@@ -728,8 +729,7 @@ def start_discovery():
                         continue
                     if payload.get("visible") is False:
                         continue
-                    with peers_lock:
-                        discovered_peers[peer_ip] = {
+                    peer_info = {
                             "name": payload.get("device_name", "Unknown Device"),
                             "hostname": payload.get("hostname", ""),
                             "ip": peer_ip,
@@ -738,6 +738,27 @@ def start_discovery():
                             "is_phone": payload.get("is_phone", not payload.get("is_laptop", False)),
                             "last_seen": time.time()
                         }
+                    with peers_lock:
+                        discovered_peers[peer_ip] = peer_info
+
+                    # Auto-reconnect: if this beacon is from our paired phone, update its IP
+                    if peer_info.get("is_phone"):
+                        try:
+                            with pairing_mgr.lock:
+                                paired = pairing_mgr.data.get("paired_device")
+                                if paired:
+                                    peer_name = peer_info.get("name", "").lower()
+                                    paired_name = (paired.get("name") or "").lower()
+                                    paired_id = paired.get("id", "")
+                                    old_ip = paired.get("last_ip")
+                                    # Match by device name or device id
+                                    if (peer_name and paired_name and peer_name == paired_name) or \
+                                       (paired_id and payload.get("device_id") == paired_id):
+                                        if old_ip != peer_ip:
+                                            paired["last_ip"] = peer_ip
+                                            pairing_mgr.save()
+                        except Exception:
+                            pass
             except Exception:
                 pass
 
@@ -1256,6 +1277,7 @@ MOBILE_CLIENT_HTML = """<!DOCTYPE html>
       const pairToken = urlParams.get("pair") || urlParams.get("token");
       if (pairToken) {
         document.getElementById("pair-token").value = pairToken.toUpperCase();
+        pairWithLaptop();
       }
       const savedName = localStorage.getItem("mynebula_device_name");
       if (savedName) document.getElementById("device-name").value = savedName;

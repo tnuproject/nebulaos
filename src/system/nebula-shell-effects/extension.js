@@ -57,6 +57,7 @@ let _petalDropWinSignal = null;
 let _origShowBanner = null;
 let _origHideBanner = null;
 let _origUpdateIcon = null;
+let _origBannerInit = null;
 let _origShowAppsIconInit = null;
 let _origShowNotificationCompleted = null;
 let _notificationAutoDismissId = null;
@@ -1317,6 +1318,39 @@ function enable() {
 
     // 2. Notification Animations
     if (MessageTray && MessageTray.NotificationBanner) {
+        if (!_origBannerInit && MessageTray.NotificationBanner.prototype._init) {
+            _origBannerInit = MessageTray.NotificationBanner.prototype._init;
+            MessageTray.NotificationBanner.prototype._init = function(notification) {
+                _origBannerInit.call(this, notification);
+
+                let updateShape = () => {
+                    try {
+                        let isExp = false;
+                        if (this._expanded || this.expanded) isExp = true;
+                        if (this.height > 85) isExp = true;
+                        if (this._actionArea && this._actionArea.visible && this._actionArea.get_n_children && this._actionArea.get_n_children() > 0) isExp = true;
+                        if (this._secondaryActions && this._secondaryActions.visible) isExp = true;
+
+                        if (isExp) {
+                            this.add_style_class_name('notification-expanded');
+                            this.add_style_class_name('expanded');
+                        } else {
+                            this.remove_style_class_name('notification-expanded');
+                            this.remove_style_class_name('expanded');
+                        }
+                    } catch (e) {}
+                };
+
+                this.connect('notify::height', () => updateShape());
+                this.connect('notify::hover', () => updateShape());
+                if (this.notification) {
+                    try {
+                        this.notification.connect('notify::acknowledged', () => updateShape());
+                    } catch (e) {}
+                }
+            };
+        }
+
         if (!_origShowBanner) {
             _origShowBanner = MessageTray.NotificationBanner.prototype._show;
         }
@@ -1826,6 +1860,7 @@ function disable() {
 
     // Restore banner methods
     if (MessageTray && MessageTray.NotificationBanner) {
+        if (_origBannerInit) MessageTray.NotificationBanner.prototype._init = _origBannerInit;
         if (_origShowBanner) MessageTray.NotificationBanner.prototype._show = _origShowBanner;
         if (_origHideBanner) MessageTray.NotificationBanner.prototype._hide = _origHideBanner;
         if (_origUpdateIcon) MessageTray.NotificationBanner.prototype._updateIcon = _origUpdateIcon;

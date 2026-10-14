@@ -10,6 +10,10 @@ rm -f /usr/share/applications/installer.desktop \
       /usr/share/applications/install-debian.desktop \
       /usr/share/applications/calamares.desktop \
       /usr/share/applications/nebula-installer-autostart.desktop \
+      /usr/share/applications/org.gnome.Music.desktop \
+      /usr/share/applications/gnome-music.desktop \
+      /usr/share/applications/org.gnome.Totem.desktop \
+      /usr/share/applications/totem.desktop \
       /usr/bin/install-nebula \
       /usr/bin/nebula-installer \
       /usr/bin/nebula-setup \

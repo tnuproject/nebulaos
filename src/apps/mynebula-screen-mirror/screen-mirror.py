@@ -1,291 +1,285 @@
 #!/usr/bin/env python3
 """
-MyNebula Screen Mirroring Window
-Receives and displays live screen stream frames from the paired Android device,
-handling authorization requests, phone notifications, and user permission responses.
+MyNebula Screen Mirroring
+Uses scrcpy to mirror Android screen over USB or Wi-Fi (ADB) with ultra-low latency,
+high frame rate, audio forwarding, and keyboard/mouse control.
 """
 
 import os
 import sys
 import json
 import time
-import urllib.request
-import urllib.error
+import shutil
+import subprocess
 import threading
+import urllib.request
 
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gtk, Adw, GLib, Gio, Gdk, GdkPixbuf
+from gi.repository import Gtk, Adw, GLib, Gio
 
-REQUEST_URL = "http://127.0.0.1:53317/api/mirror/request"
-STREAM_URL  = "http://127.0.0.1:53317/api/mirror/stream"
-STATUS_URL  = "http://127.0.0.1:53317/api/mirror/status"
-STOP_URL    = "http://127.0.0.1:53317/api/mirror/stop"
+APP_ID = "org.nebulaos.ScreenMirror"
+COMPANION_STATUS_URL = "http://127.0.0.1:53317/api/status"
 
-class ScreenMirrorWindow(Adw.ApplicationWindow):
-    def __init__(self, app, phone_name="Android Phone"):
+def check_scrcpy_installed():
+    return shutil.which("scrcpy") is not None
+
+def check_adb_installed():
+    return shutil.which("adb") is not None
+
+def get_adb_devices():
+    """Returns list of connected ADB device serials/IPs."""
+    try:
+        res = subprocess.run(["adb", "devices"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
+        lines = res.stdout.strip().split("\n")[1:]
+        devices = []
+        for line in lines:
+            parts = line.strip().split()
+            if len(parts) >= 2 and parts[1] == "device":
+                devices.append(parts[0])
+        return devices
+    except Exception:
+        return []
+
+def launch_scrcpy(target=None, phone_name="Android Phone"):
+    """Launches scrcpy process."""
+    cmd = ["scrcpy"]
+    if target:
+        cmd.extend(["-s", target])
+    cmd.extend([
+        "--window-title", f"{phone_name} — MyNebula Screen Mirror",
+        "--stay-awake"
+    ])
+    try:
+        proc = subprocess.Popen(cmd)
+        return True, proc
+    except Exception as e:
+        return False, str(e)
+
+class ScreenMirrorLauncherWindow(Adw.ApplicationWindow):
+    def __init__(self, app, phone_name="Android Phone", phone_ip=None):
         super().__init__(application=app)
-        self.set_title(f"{phone_name} — Screen Mirroring")
-        self.set_default_size(440, 840)
+        self.set_title("Screen Mirroring — MyNebula")
+        self.set_default_size(480, 520)
+        self.set_resizable(False)
 
         self.phone_name = phone_name
-        self.running = True
-        self.fps_count = 0
-        self.fps_timer = time.time()
-        self.current_state = "requesting"  # requesting, denied, streaming, error
+        self.phone_ip = phone_ip or ""
 
+        # Query companion for paired phone IP if not provided
+        if not self.phone_ip:
+            self._fetch_companion_ip()
+
+        self._build_ui()
+
+        # Try automatic direct launch if device is already plugged in via USB
+        GLib.timeout_add(400, self._auto_connect_if_ready)
+
+    def _fetch_companion_ip(self):
+        try:
+            with urllib.request.urlopen(COMPANION_STATUS_URL, timeout=1.5) as resp:
+                data = json.loads(resp.read().decode())
+                if data.get("paired_device_name"):
+                    self.phone_name = data["paired_device_name"]
+                if data.get("is_paired"):
+                    # Check paired device details
+                    pass
+        except Exception:
+            pass
+
+    def _build_ui(self):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_content(root)
 
         # Header bar
         header = Adw.HeaderBar()
-        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        lbl_title = Gtk.Label(label=phone_name, css_classes=["title-4", "bold"])
-        self.lbl_sub = Gtk.Label(label="Requesting phone permission...", css_classes=["caption", "dim-label"])
-        title_box.append(lbl_title)
-        title_box.append(self.lbl_sub)
-        header.set_title_widget(title_box)
-
-        btn_stop = Gtk.Button(label="Disconnect", css_classes=["destructive-action", "flat"])
-        btn_stop.connect("clicked", self._on_disconnect_clicked)
-        header.pack_end(btn_stop)
-
         root.append(header)
 
-        # Main viewport overlay
-        self.overlay = Gtk.Overlay(hexpand=True, vexpand=True)
-        root.append(self.overlay)
+        # Content area
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content_box.set_margin_start(24)
+        content_box.set_margin_end(24)
+        content_box.set_margin_top(16)
+        content_box.set_margin_bottom(24)
+        root.append(content_box)
 
-        # Background container (phone bezel card)
-        self.bg_box = Gtk.Box(hexpand=True, vexpand=True)
-        self.bg_box.set_halign(Gtk.Align.FILL)
-        self.bg_box.set_valign(Gtk.Align.FILL)
-        self.bg_box.add_css_class("card")
-        self.bg_box.set_margin_start(12)
-        self.bg_box.set_margin_end(12)
-        self.bg_box.set_margin_top(12)
-        self.bg_box.set_margin_bottom(12)
+        # Banner icon & title
+        banner_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        banner_box.set_halign(Gtk.Align.CENTER)
 
-        # Picture widget
-        self.picture = Gtk.Picture(hexpand=True, vexpand=True)
-        self.picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-        self.bg_box.append(self.picture)
-        self.overlay.set_child(self.bg_box)
+        icon = Gtk.Image.new_from_icon_name("video-display-symbolic")
+        icon.set_pixel_size(56)
+        banner_box.append(icon)
 
-        # Overlay status container
-        self.status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        self.status_box.set_halign(Gtk.Align.CENTER)
-        self.status_box.set_valign(Gtk.Align.CENTER)
-        self.status_box.set_margin_start(32)
-        self.status_box.set_margin_end(32)
+        title_lbl = Gtk.Label(label="Phone Screen Mirroring", css_classes=["title-2", "bold"])
+        banner_box.append(title_lbl)
 
-        # Spinner & icon
-        self.spinner = Gtk.Spinner()
-        self.spinner.set_size_request(48, 48)
-        self.status_box.append(self.spinner)
-
-        self.status_icon = Gtk.Image.new_from_icon_name("phone-symbolic")
-        self.status_icon.set_pixel_size(48)
-        self.status_icon.set_visible(False)
-        self.status_box.append(self.status_icon)
-
-        self.status_title = Gtk.Label(label="Waiting for Authorization", css_classes=["title-3", "bold"])
-        self.status_box.append(self.status_title)
-
-        self.status_desc = Gtk.Label(
-            label="A notification has been sent to your phone.\nPlease tap 'Allow' on the device to share your screen.",
+        sub_lbl = Gtk.Label(
+            label=f"Mirror and control {self.phone_name} in real-time with scrcpy.\nConnect via USB cable or local Wi-Fi network.",
             css_classes=["caption", "dim-label"]
         )
-        self.status_desc.set_justify(Gtk.Justification.CENTER)
-        self.status_desc.set_wrap(True)
-        self.status_box.append(self.status_desc)
+        sub_lbl.set_justify(Gtk.Justification.CENTER)
+        sub_lbl.set_wrap(True)
+        banner_box.append(sub_lbl)
 
-        # Action buttons box (for denied / error state)
-        self.actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        self.actions_box.set_halign(Gtk.Align.CENTER)
-        self.actions_box.set_visible(False)
+        content_box.append(banner_box)
 
-        self.btn_retry = Gtk.Button(label="Request Again", css_classes=["suggested-action"])
-        self.btn_retry.connect("clicked", lambda _: self._send_request())
-        self.actions_box.append(self.btn_retry)
+        # Preferences Group
+        pref_group = Adw.PreferencesGroup()
+        content_box.append(pref_group)
 
-        self.btn_cancel = Gtk.Button(label="Close", css_classes=["flat"])
-        self.btn_cancel.connect("clicked", lambda _: self.close())
-        self.actions_box.append(self.btn_cancel)
+        # 1. USB Connection ActionRow
+        usb_row = Adw.ActionRow(
+            title="USB Cable (Recommended)",
+            subtitle="Connect via USB cable with USB Debugging enabled for lowest latency"
+        )
+        usb_row.add_prefix(Gtk.Image.new_from_icon_name("media-removable-symbolic"))
+        btn_usb = Gtk.Button(label="Connect USB", css_classes=["suggested-action"])
+        btn_usb.set_valign(Gtk.Align.CENTER)
+        btn_usb.connect("clicked", self._on_connect_usb)
+        usb_row.add_suffix(btn_usb)
+        pref_group.add(usb_row)
 
-        self.status_box.append(self.actions_box)
-        self.overlay.add_overlay(self.status_box)
+        # 2. Wi-Fi (Wireless Debugging) ActionRow
+        wifi_row = Adw.ActionRow(
+            title="Wi-Fi (Wireless ADB)",
+            subtitle="Connect over your local network using wireless debugging (port 5555)"
+        )
+        wifi_row.add_prefix(Gtk.Image.new_from_icon_name("network-wireless-symbolic"))
+        btn_wifi = Gtk.Button(label="Connect Wi-Fi", css_classes=["flat"])
+        btn_wifi.set_valign(Gtk.Align.CENTER)
+        btn_wifi.connect("clicked", self._on_connect_wifi)
+        wifi_row.add_suffix(btn_wifi)
+        pref_group.add(wifi_row)
 
-        self.connect("close-request", self._on_close)
+        # IP Entry Row for Wi-Fi
+        self.entry_ip = Adw.EntryRow(title="Phone IP Address")
+        if self.phone_ip:
+            self.entry_ip.set_text(self.phone_ip)
+        pref_group.add(self.entry_ip)
 
-        # Initial request and background threads
-        self._set_state("requesting")
-        self._send_request()
-        threading.Thread(target=self._status_poller, daemon=True).start()
-        threading.Thread(target=self._stream_reader, daemon=True).start()
+        # Status & Spinner
+        self.status_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.status_box.set_halign(Gtk.Align.CENTER)
+        self.status_box.set_margin_top(8)
 
-    def _set_state(self, state, error_msg=None):
-        self.current_state = state
-        def _update():
-            if state == "requesting":
-                self.spinner.set_visible(True)
-                self.spinner.start()
-                self.status_icon.set_visible(False)
-                self.status_title.set_text("Waiting for Authorization")
-                self.status_desc.set_text("A prompt appeared on your phone.\nTap 'Allow' on your device to share your screen.")
-                self.actions_box.set_visible(False)
-                self.lbl_sub.set_text("Waiting for phone permission...")
-                self.status_box.set_visible(True)
+        self.spinner = Gtk.Spinner()
+        self.spinner.set_visible(False)
+        self.status_box.append(self.spinner)
 
-            elif state == "denied":
-                self.spinner.stop()
-                self.spinner.set_visible(False)
-                self.status_icon.set_from_icon_name("dialog-warning-symbolic")
-                self.status_icon.set_visible(True)
-                self.status_title.set_text("Permission Denied by Phone")
-                self.status_desc.set_text("The screen sharing request was declined on your mobile device.")
-                self.actions_box.set_visible(True)
-                self.lbl_sub.set_text("Permission declined")
-                self.status_box.set_visible(True)
+        self.lbl_status = Gtk.Label(label="", css_classes=["caption"])
+        self.status_box.append(self.lbl_status)
 
-            elif state == "error":
-                self.spinner.stop()
-                self.spinner.set_visible(False)
-                self.status_icon.set_from_icon_name("network-error-symbolic")
-                self.status_icon.set_visible(True)
-                self.status_title.set_text("Connection Error")
-                self.status_desc.set_text(error_msg or "Cannot connect to your phone. Ensure both devices are connected to the same Wi-Fi network.")
-                self.actions_box.set_visible(True)
-                self.lbl_sub.set_text("Error connecting to phone")
-                self.status_box.set_visible(True)
+        content_box.append(self.status_box)
 
-            elif state == "streaming":
-                self.spinner.stop()
-                self.status_box.set_visible(False)
+    def _auto_connect_if_ready(self):
+        # If scrcpy is missing, alert user
+        if not check_scrcpy_installed():
+            self._set_status("scrcpy is not installed. Run 'sudo apt install scrcpy adb'", is_error=True)
             return False
-        GLib.idle_add(_update)
 
-    def _send_request(self):
-        self._set_state("requesting")
-        def _req():
-            try:
-                req = urllib.request.Request(
-                    REQUEST_URL,
-                    data=b"{}",
-                    headers={"Content-Type": "application/json"}
-                )
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    data = json.loads(resp.read().decode())
-                    if not data.get("success") and data.get("error"):
-                        self._set_state("error", data.get("error"))
-            except Exception as e:
-                self._set_state("error", str(e))
-        threading.Thread(target=_req, daemon=True).start()
-
-    def _status_poller(self):
-        while self.running:
-            try:
-                req = urllib.request.Request(STATUS_URL)
-                with urllib.request.urlopen(req, timeout=3) as resp:
-                    data = json.loads(resp.read().decode())
-                    state = data.get("state", "idle")
-                    error = data.get("error")
-
-                    if state == "denied" and self.current_state != "denied":
-                        self._set_state("denied")
-                    elif state == "error" and self.current_state != "error":
-                        self._set_state("error", error)
-                    elif state == "streaming" and self.current_state != "streaming":
-                        self._set_state("streaming")
-            except Exception:
-                pass
-            time.sleep(1)
-
-    def _on_disconnect_clicked(self, _):
-        self.close()
-
-    def _on_close(self, _):
-        self.running = False
-        def _notify_stop():
-            try:
-                req = urllib.request.Request(STOP_URL, data=b"{}", headers={"Content-Type": "application/json"})
-                urllib.request.urlopen(req, timeout=2)
-            except Exception:
-                pass
-        threading.Thread(target=_notify_stop, daemon=True).start()
+        # Check if USB device is already present
+        devices = get_adb_devices()
+        if devices:
+            self._set_status(f"Found ADB device: {devices[0]}. Launching scrcpy...", is_busy=True)
+            threading.Thread(target=self._launch_target, args=(devices[0],), daemon=True).start()
         return False
 
-    def _stream_reader(self):
-        """Reads MJPEG stream from companion daemon."""
-        while self.running:
-            try:
-                req = urllib.request.Request(STREAM_URL)
-                with urllib.request.urlopen(req, timeout=10) as stream:
-                    buffer = b""
-                    while self.running:
-                        chunk = stream.read(16384)
-                        if not chunk:
-                            break
-                        buffer += chunk
+    def _set_status(self, text, is_busy=False, is_error=False):
+        def _apply():
+            self.lbl_status.set_text(text)
+            if is_busy:
+                self.spinner.set_visible(True)
+                self.spinner.start()
+            else:
+                self.spinner.stop()
+                self.spinner.set_visible(False)
 
-                        start = buffer.find(b"\xff\xd8")
-                        end = buffer.find(b"\xff\xd9", start + 2) if start != -1 else -1
+            if is_error:
+                self.lbl_status.add_css_class("error")
+            else:
+                self.lbl_status.remove_css_class("error")
+            return GLib.SOURCE_REMOVE
+        GLib.idle_add(_apply)
 
-                        if start != -1 and end != -1:
-                            jpg_bytes = buffer[start:end+2]
-                            buffer = buffer[end+2:]
-                            self._display_frame(jpg_bytes)
-            except Exception:
+    def _on_connect_usb(self, _):
+        if not check_scrcpy_installed():
+            self._set_status("Please install scrcpy first: 'sudo apt install scrcpy adb'", is_error=True)
+            return
+
+        self._set_status("Scanning for USB connected Android device...", is_busy=True)
+
+        def _task():
+            time.sleep(0.5)
+            devices = get_adb_devices()
+            if devices:
+                self._launch_target(devices[0])
+            else:
+                # Try adb usb or adb start-server
+                subprocess.run(["adb", "start-server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 time.sleep(1)
+                devices = get_adb_devices()
+                if devices:
+                    self._launch_target(devices[0])
+                else:
+                    self._set_status("No USB device detected. Make sure USB Debugging is ON in Android Settings.", is_error=True)
 
-    def _display_frame(self, frame_bytes):
-        self.fps_count += 1
-        now = time.time()
-        if now - self.fps_timer >= 1.0:
-            fps = self.fps_count
-            self.fps_count = 0
-            self.fps_timer = now
-            GLib.idle_add(lambda: self.lbl_sub.set_text(f"Live Screen • {fps} FPS") or False)
+        threading.Thread(target=_task, daemon=True).start()
 
-        try:
-            loader = GdkPixbuf.PixbufLoader.new_with_type("jpeg")
-            loader.write(frame_bytes)
-            loader.close()
-            pixbuf = loader.get_pixbuf()
-            if pixbuf:
-                paintable = Gdk.Texture.new_for_pixbuf(pixbuf)
-                def _update():
-                    if not self.running:
-                        return False
-                    self.picture.set_paintable(paintable)
-                    if self.current_state != "streaming":
-                        self._set_state("streaming")
-                    return False
-                GLib.idle_add(_update)
-        except Exception:
-            pass
+    def _on_connect_wifi(self, _):
+        if not check_scrcpy_installed():
+            self._set_status("Please install scrcpy first: 'sudo apt install scrcpy adb'", is_error=True)
+            return
+
+        ip = self.entry_ip.get_text().strip()
+        if not ip:
+            self._set_status("Please enter phone IP address", is_error=True)
+            return
+
+        target = f"{ip}:5555" if ":" not in ip else ip
+        self._set_status(f"Connecting to wireless ADB at {target}...", is_busy=True)
+
+        def _task():
+            # Run adb connect
+            try:
+                res = subprocess.run(["adb", "connect", target], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=8)
+                out = res.stdout.strip()
+                if "connected to" in out.lower() and "cannot" not in out.lower():
+                    self._launch_target(target)
+                else:
+                    self._set_status(f"Could not connect to {target}. Enable Wireless Debugging on port 5555.", is_error=True)
+            except Exception as e:
+                self._set_status(f"Connection failed: {e}", is_error=True)
+
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _launch_target(self, target):
+        self._set_status(f"Launching screen mirror for {target}...", is_busy=True)
+        success, proc_or_err = launch_scrcpy(target, self.phone_name)
+        if success:
+            self._set_status("Screen mirroring active! You can minimize this window.")
+            # Minimize launcher window while scrcpy runs
+            GLib.idle_add(lambda: self.minimize())
+        else:
+            self._set_status(f"Failed to launch scrcpy: {proc_or_err}", is_error=True)
 
 def main():
-    phone_name = "Android Phone"
-    if len(sys.argv) > 1:
-        phone_name = sys.argv[1]
-    else:
-        try:
-            with urllib.request.urlopen("http://127.0.0.1:53317/api/status", timeout=1) as resp:
-                data = json.loads(resp.read().decode())
-                if data.get("paired_device_name"):
-                    phone_name = data["paired_device_name"]
-        except Exception:
-            pass
-
     GLib.set_prgname("org.nebulaos.ScreenMirror")
     GLib.set_application_name("Screen Mirroring")
-    app = Adw.Application(application_id="org.nebulaos.ScreenMirror", flags=Gio.ApplicationFlags.NON_UNIQUE)
+    app = Adw.Application(application_id=APP_ID, flags=Gio.ApplicationFlags.NON_UNIQUE)
+
+    phone_name = "Android Phone"
+    phone_ip = ""
+
+    args = sys.argv[1:]
+    if len(args) >= 1:
+        phone_name = args[0]
+    if len(args) >= 2:
+        phone_ip = args[1]
 
     def on_activate(a):
-        win = ScreenMirrorWindow(a, phone_name)
+        win = ScreenMirrorLauncherWindow(a, phone_name, phone_ip)
         win.present()
 
     app.connect("activate", on_activate)

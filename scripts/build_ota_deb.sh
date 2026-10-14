@@ -31,7 +31,7 @@ Version: ${PKG_VERSION}
 Section: gnome
 Priority: optional
 Architecture: all
-Depends: gnome-shell, nautilus, python3, python3-gi, gir1.2-gtk-3.0
+Depends: gnome-shell, nautilus, python3, python3-gi, gir1.2-gtk-3.0, scrcpy, adb, systemd-timesyncd
 Maintainer: NebulaOS Team <support@nebulaos.org>
 Description: NebulaOS desktop configuration, silent boot, branding, and shell integration.
  This package provides core NebulaOS desktop customizations including
@@ -141,9 +141,14 @@ for md in /usr/share/applications/mynebula.desktop /usr/local/share/applications
     if [ -f "$md" ]; then
         sed -i '/^NoDisplay=/d' "$md" 2>/dev/null || true
         echo "NoDisplay=true" >> "$md"
-
     fi
 done
+
+# Remove obsolete music and video player launchers from app grid
+rm -f /usr/share/applications/org.gnome.Music.desktop \
+      /usr/share/applications/gnome-music.desktop \
+      /usr/share/applications/org.gnome.Totem.desktop \
+      /usr/share/applications/totem.desktop 2>/dev/null || true
 
 # Silence GRUB bootloader
 if [ -f /etc/grub.d/10_linux ]; then
@@ -169,9 +174,33 @@ fi
 # Clear thumbnail cache for users so Nautilus re-renders .desktop previews immediately
 rm -rf /home/*/.cache/thumbnails/ 2>/dev/null || true
 
-# Record OTA update pending for first-boot notification
+# Record OTA update for a ONE-TIME first-boot notification, then auto-cleanup
+mkdir -p /var/lib/nebulaos
+chmod 1777 /var/lib/nebulaos 2>/dev/null || true
 echo "${NEW_VER}" > /var/lib/nebulaos/ota_update_pending
 chmod 666 /var/lib/nebulaos/ota_update_pending 2>/dev/null || true
+
+# Create a oneshot systemd service to show the notification once and delete the marker
+mkdir -p /etc/systemd/system
+cat << 'OTAEOF' > /etc/systemd/system/nebula-ota-notify.service
+[Unit]
+Description=NebulaOS OTA Update Notification (one-time)
+After=graphical.target gdm.service
+ConditionPathExists=/var/lib/nebulaos/ota_update_pending
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'VER=$(cat /var/lib/nebulaos/ota_update_pending 2>/dev/null); DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u $(logname 2>/dev/null || echo root))/bus notify-send -i system-software-update "NebulaOS Updated" "Your system has been updated to $VER" 2>/dev/null; rm -f /var/lib/nebulaos/ota_update_pending; systemctl disable nebula-ota-notify.service 2>/dev/null'
+RemainAfterExit=no
+
+[Install]
+WantedBy=graphical.target
+OTAEOF
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable nebula-ota-notify.service 2>/dev/null || true
+
+# Process any pending dpkg triggers to avoid 'trigger processing' on reboot
+dpkg --configure -a 2>/dev/null || true
 
 exit 0
 EOF

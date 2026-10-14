@@ -78,7 +78,7 @@ chroot "${CHROOT_DIR}" apt-get install -y --no-install-recommends \
     gnome-control-center gnome-control-center-data \
     gnome-shell-extension-dashtodock \
     firefox-esr gnome-calculator gnome-text-editor gnome-disk-utility gnome-system-monitor gnome-weather \
-    epiphany-browser gnome-software gnome-calendar cheese gnome-contacts gnome-calls geary gnome-music totem \
+    epiphany-browser gnome-software gnome-calendar cheese gnome-contacts gnome-calls geary \
     gnome-keyring libpam-gnome-keyring policykit-1-gnome libsecret-1-0 libsecret-tools \
     evince eog file-roller libnotify-bin parted dosfstools btrfs-progs rsync squashfs-tools \
     grub-efi-amd64 grub-pc-bin \
@@ -89,7 +89,8 @@ chroot "${CHROOT_DIR}" apt-get install -y --no-install-recommends \
     firmware-atheros firmware-brcm80211 firmware-libertas firmware-sof-signed firmware-netxen firmware-bnx2 firmware-bnx2x \
     wireless-regdb wpasupplicant wireless-tools bluez bluez-firmware pulseaudio-utils \
     mesa-va-drivers mesa-vdpau-drivers mesa-vulkan-drivers pciutils usbutils xserver-xorg-video-all \
-    xserver-xorg-video-intel xserver-xorg-video-amdgpu xserver-xorg-video-nouveau
+    xserver-xorg-video-intel xserver-xorg-video-amdgpu xserver-xorg-video-nouveau \
+    scrcpy adb systemd-timesyncd
 
 # Configure live-config defaults
 mkdir -p "${CHROOT_DIR}/etc/live"
@@ -410,6 +411,10 @@ RemainAfterExit=yes
 WantedBy=graphical.target multi-user.target
 EOF
 chroot "${CHROOT_DIR}" systemctl enable plymouth-quit-force.service 2>/dev/null || true
+
+# Enable NTP time synchronization by default
+chroot "${CHROOT_DIR}" timedatectl set-ntp true 2>/dev/null || true
+chroot "${CHROOT_DIR}" systemctl enable systemd-timesyncd.service 2>/dev/null || true
 
 # 18. Update Initramfs with live-boot hooks
 echo "[base] Updating initramfs with live-boot and plymouth..."

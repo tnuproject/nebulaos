@@ -423,6 +423,114 @@ class LanguagePanel(SettingsPanel):
         lang_grp.add(create_combo_row("Regional Formats", formats, 0, None, "preferences-system-time-symbolic"))
 
 
+class DateTimePanel(SettingsPanel):
+    def on_build(self):
+        # 1. Automatic Time (NTP) Section
+        ntp_grp = Adw.PreferencesGroup(title="Automatic Time (NTP)", description="Network time synchronization protocol")
+        self.add(ntp_grp)
+
+        ntp_active = run_cmd(["timedatectl", "show", "--property=NTP", "--value"]).lower() == "yes"
+
+        self.ntp_row, self.ntp_sw = create_switch_row(
+            "Automatic Date & Time (NTP)",
+            "Synchronize time with network NTP servers automatically on boot and continuously",
+            active=ntp_active,
+            on_toggled=self._on_ntp_toggled,
+            icon_name="preferences-system-time-symbolic"
+        )
+        ntp_grp.add(self.ntp_row)
+
+        sync_btn = Gtk.Button(label="Sync Now", css_classes=["flat"])
+        sync_btn.set_valign(Gtk.Align.CENTER)
+        sync_btn.connect("clicked", self._on_sync_now)
+        self.sync_row = create_action_row(
+            "NTP Time Server Status",
+            "systemd-timesyncd active and synchronizing" if ntp_active else "Automatic time sync disabled",
+            "network-transmit-receive-symbolic",
+            sync_btn
+        )
+        ntp_grp.add(self.sync_row)
+
+        # 2. Current Date & Time Display
+        curr_grp = Adw.PreferencesGroup(title="Current Date & Time")
+        self.add(curr_grp)
+
+        self.time_row = create_action_row("Local Time", time.strftime("%H:%M:%S"), "preferences-system-time-symbolic")
+        curr_grp.add(self.time_row)
+
+        self.date_row = create_action_row("Current Date", time.strftime("%A, %B %d, %Y"), "x-office-calendar-symbolic")
+        curr_grp.add(self.date_row)
+
+        # 3. Timezone & Clock Display
+        tz_grp = Adw.PreferencesGroup(title="Timezone & Clock Display")
+        self.add(tz_grp)
+
+        tz = run_cmd(["timedatectl", "show", "--property=Timezone", "--value"]) or "Europe/Rome"
+        self.tz_row = create_action_row("Timezone", tz, "find-location-symbolic")
+        tz_grp.add(self.tz_row)
+
+        fmt_24h = gsettings_get("org.gnome.desktop.interface", "clock-format") != "12h"
+        sw_24h_row, _ = create_switch_row(
+            "24-Hour Time Format",
+            "Display clock in 24-hour format instead of 12-hour AM/PM",
+            active=fmt_24h,
+            on_toggled=lambda v: gsettings_set("org.gnome.desktop.interface", "clock-format", "24h" if v else "12h"),
+            icon_name="preferences-system-time-symbolic"
+        )
+        tz_grp.add(sw_24h_row)
+
+        show_sec = gsettings_get("org.gnome.desktop.interface", "clock-show-seconds") == "true"
+        sw_sec_row, _ = create_switch_row(
+            "Show Seconds",
+            "Display seconds in topbar clock",
+            active=show_sec,
+            on_toggled=lambda v: gsettings_set("org.gnome.desktop.interface", "clock-show-seconds", "true" if v else "false"),
+            icon_name="preferences-system-time-symbolic"
+        )
+        tz_grp.add(sw_sec_row)
+
+        show_day = gsettings_get("org.gnome.desktop.interface", "clock-show-weekday") == "true"
+        sw_day_row, _ = create_switch_row(
+            "Show Weekday",
+            "Display day of week in topbar clock",
+            active=show_day,
+            on_toggled=lambda v: gsettings_set("org.gnome.desktop.interface", "clock-show-weekday", "true" if v else "false"),
+            icon_name="x-office-calendar-symbolic"
+        )
+        tz_grp.add(sw_day_row)
+
+        # Refresh clock periodically
+        GLib.timeout_add_seconds(1, self._refresh_clock)
+
+    def _refresh_clock(self):
+        try:
+            self.time_row.set_subtitle(time.strftime("%H:%M:%S"))
+            self.date_row.set_subtitle(time.strftime("%A, %B %d, %Y"))
+        except Exception:
+            return False
+        return True
+
+    def _on_ntp_toggled(self, active):
+        def _task():
+            cmd = ["timedatectl", "set-ntp", "true" if active else "false"]
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            srv_cmd = ["systemctl", "enable" if active else "disable", "--now", "systemd-timesyncd"]
+            subprocess.run(srv_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            status_text = "systemd-timesyncd active and synchronizing" if active else "Automatic time sync disabled"
+            GLib.idle_add(lambda: self.sync_row.set_subtitle(status_text))
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _on_sync_now(self, btn):
+        btn.set_sensitive(False)
+        self.sync_row.set_subtitle("Synchronizing clock with NTP servers...")
+        def _task():
+            subprocess.run(["systemctl", "restart", "systemd-timesyncd"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(["timedatectl", "set-ntp", "true"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            time.sleep(1.5)
+            GLib.idle_add(lambda: (btn.set_sensitive(True), self.sync_row.set_subtitle("Synchronized successfully via NTP"), self._refresh_clock()))
+        threading.Thread(target=_task, daemon=True).start()
+
+
 class MyNebulaPanel(SettingsPanel):
     def on_build(self):
         self.dev_grp = Adw.PreferencesGroup(title="Connected Device", description="Companion phone paired with this system")
@@ -2201,6 +2309,7 @@ class SettingsWindow(Adw.ApplicationWindow):
             ("HEADER", "Input"),
             ("keyboard", "Keyboard", "input-keyboard-symbolic", KeyboardPanel),
             ("language", "Language & Region", "preferences-desktop-locale-symbolic", LanguagePanel),
+            ("datetime", "Date & Time", "preferences-system-time-symbolic", DateTimePanel),
 
             ("HEADER", "Account"),
             ("mynebula", "MyNebula", "phone-symbolic", MyNebulaPanel),
