@@ -22,11 +22,51 @@ from gi.repository import Gtk, Adw, GLib, Gio
 APP_ID = "org.nebulaos.ScreenMirror"
 COMPANION_STATUS_URL = "http://127.0.0.1:53317/api/status"
 
+def get_scrcpy_binary():
+    which = shutil.which("scrcpy")
+    if which:
+        return which
+    for p in ["/usr/bin/scrcpy", "/usr/local/bin/scrcpy", os.path.expanduser("~/.local/bin/scrcpy")]:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
 def check_scrcpy_installed():
-    return shutil.which("scrcpy") is not None
+    return get_scrcpy_binary() is not None
 
 def check_adb_installed():
     return shutil.which("adb") is not None
+
+def download_scrcpy_user():
+    """Downloads scrcpy portable release to ~/.local/bin and ~/.local/share/scrcpy."""
+    try:
+        url = "https://github.com/Genymobile/scrcpy/releases/download/v3.1/scrcpy-linux-x86_64-v3.1.tar.gz"
+        dest_bin = os.path.expanduser("~/.local/bin")
+        dest_share = os.path.expanduser("~/.local/share/scrcpy")
+        os.makedirs(dest_bin, exist_ok=True)
+        os.makedirs(dest_share, exist_ok=True)
+        tmp_tar = "/tmp/scrcpy_dl.tar.gz"
+        urllib.request.urlretrieve(url, tmp_tar)
+        import tarfile
+        with tarfile.open(tmp_tar, "r:gz") as tar:
+            for member in tar.getmembers():
+                if member.name.endswith("/scrcpy"):
+                    f = tar.extractfile(member)
+                    if f:
+                        with open(os.path.join(dest_bin, "scrcpy"), "wb") as out:
+                            out.write(f.read())
+                        os.chmod(os.path.join(dest_bin, "scrcpy"), 0o755)
+                elif member.name.endswith("/scrcpy-server"):
+                    f = tar.extractfile(member)
+                    if f:
+                        with open(os.path.join(dest_share, "scrcpy-server"), "wb") as out:
+                            out.write(f.read())
+                        os.chmod(os.path.join(dest_share, "scrcpy-server"), 0o644)
+        if os.path.exists(tmp_tar):
+            os.remove(tmp_tar)
+        return True
+    except Exception:
+        return False
 
 def get_adb_devices():
     """Returns list of connected ADB device serials/IPs."""
@@ -44,15 +84,23 @@ def get_adb_devices():
 
 def launch_scrcpy(target=None, phone_name="Android Phone"):
     """Launches scrcpy process."""
-    cmd = ["scrcpy"]
+    scrcpy_bin = get_scrcpy_binary()
+    if not scrcpy_bin:
+        return False, "scrcpy binary not found"
+    cmd = [scrcpy_bin]
     if target:
         cmd.extend(["-s", target])
     cmd.extend([
         "--window-title", f"{phone_name} — MyNebula Screen Mirror",
         "--stay-awake"
     ])
+    env = os.environ.copy()
+    for sp in ["/usr/share/scrcpy/scrcpy-server", "/usr/local/share/scrcpy/scrcpy-server", os.path.expanduser("~/.local/share/scrcpy/scrcpy-server")]:
+        if os.path.isfile(sp):
+            env["SCRCPY_SERVER_PATH"] = sp
+            break
     try:
-        proc = subprocess.Popen(cmd)
+        proc = subprocess.Popen(cmd, env=env)
         return True, proc
     except Exception as e:
         return False, str(e)
@@ -173,13 +221,25 @@ class ScreenMirrorLauncherWindow(Adw.ApplicationWindow):
 
         content_box.append(self.status_box)
 
+    def _ensure_scrcpy_ready(self, on_ready_callback):
+        if check_scrcpy_installed():
+            on_ready_callback()
+            return
+
+        self._set_status("Downloading screen mirror engine...", is_busy=True)
+        def _dl():
+            ok = download_scrcpy_user()
+            if ok and check_scrcpy_installed():
+                self._set_status("Screen mirror engine ready.", is_busy=False)
+                on_ready_callback()
+            else:
+                self._set_status("Screen mirror engine not found. Connect to internet or install adb.", is_error=True)
+        threading.Thread(target=_dl, daemon=True).start()
+
     def _auto_connect_if_ready(self):
-        # If scrcpy is missing, alert user
         if not check_scrcpy_installed():
-            self._set_status("scrcpy is not installed. Run 'sudo apt install scrcpy adb'", is_error=True)
             return False
 
-        # Check if USB device is already present
         devices = get_adb_devices()
         if devices:
             self._set_status(f"Found ADB device: {devices[0]}. Launching scrcpy...", is_busy=True)
@@ -204,55 +264,51 @@ class ScreenMirrorLauncherWindow(Adw.ApplicationWindow):
         GLib.idle_add(_apply)
 
     def _on_connect_usb(self, _):
-        if not check_scrcpy_installed():
-            self._set_status("Please install scrcpy first: 'sudo apt install scrcpy adb'", is_error=True)
-            return
-
-        self._set_status("Scanning for USB connected Android device...", is_busy=True)
-
-        def _task():
-            time.sleep(0.5)
-            devices = get_adb_devices()
-            if devices:
-                self._launch_target(devices[0])
-            else:
-                # Try adb usb or adb start-server
-                subprocess.run(["adb", "start-server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                time.sleep(1)
+        def _proceed():
+            self._set_status("Scanning for USB connected Android device...", is_busy=True)
+            def _task():
+                time.sleep(0.5)
                 devices = get_adb_devices()
                 if devices:
                     self._launch_target(devices[0])
                 else:
-                    self._set_status("No USB device detected. Make sure USB Debugging is ON in Android Settings.", is_error=True)
+                    # Try adb usb or adb start-server
+                    subprocess.run(["adb", "start-server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    time.sleep(1)
+                    devices = get_adb_devices()
+                    if devices:
+                        self._launch_target(devices[0])
+                    else:
+                        self._set_status("No USB device detected. Make sure USB Debugging is ON in Android Settings.", is_error=True)
 
-        threading.Thread(target=_task, daemon=True).start()
+            threading.Thread(target=_task, daemon=True).start()
+
+        self._ensure_scrcpy_ready(_proceed)
 
     def _on_connect_wifi(self, _):
-        if not check_scrcpy_installed():
-            self._set_status("Please install scrcpy first: 'sudo apt install scrcpy adb'", is_error=True)
-            return
-
         ip = self.entry_ip.get_text().strip()
         if not ip:
             self._set_status("Please enter phone IP address", is_error=True)
             return
 
-        target = f"{ip}:5555" if ":" not in ip else ip
-        self._set_status(f"Connecting to wireless ADB at {target}...", is_busy=True)
+        def _proceed():
+            target = f"{ip}:5555" if ":" not in ip else ip
+            self._set_status(f"Connecting to wireless ADB at {target}...", is_busy=True)
 
-        def _task():
-            # Run adb connect
-            try:
-                res = subprocess.run(["adb", "connect", target], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=8)
-                out = res.stdout.strip()
-                if "connected to" in out.lower() and "cannot" not in out.lower():
-                    self._launch_target(target)
-                else:
-                    self._set_status(f"Could not connect to {target}. Enable Wireless Debugging on port 5555.", is_error=True)
-            except Exception as e:
-                self._set_status(f"Connection failed: {e}", is_error=True)
+            def _task():
+                try:
+                    res = subprocess.run(["adb", "connect", target], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=8)
+                    out = res.stdout.strip()
+                    if "connected to" in out.lower() and "cannot" not in out.lower():
+                        self._launch_target(target)
+                    else:
+                        self._set_status(f"Could not connect to {target}. Enable Wireless Debugging on port 5555.", is_error=True)
+                except Exception as e:
+                    self._set_status(f"Wireless ADB error: {e}", is_error=True)
 
-        threading.Thread(target=_task, daemon=True).start()
+            threading.Thread(target=_task, daemon=True).start()
+
+        self._ensure_scrcpy_ready(_proceed)
 
     def _launch_target(self, target):
         self._set_status(f"Launching screen mirror for {target}...", is_busy=True)

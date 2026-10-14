@@ -55,7 +55,28 @@ chroot "${CHROOT_TMP}" apt-get install -y --no-install-recommends \
     xserver-xorg-video-all mesa-vulkan-drivers libgl1-mesa-dri \
     gnome-sushi \
     python3-qrcode python3-pil \
+    adb systemd-timesyncd libsdl2-2.0-0 libusb-1.0-0 curl tar \
     os-prober
+
+# Install scrcpy portable release if not present in base
+if [ ! -f "${CHROOT_TMP}/usr/bin/scrcpy" ] || [ ! -f "${CHROOT_TMP}/usr/share/scrcpy/scrcpy-server" ]; then
+    echo "[patch] Installing scrcpy portable release into patched system..."
+    mkdir -p "${CHROOT_TMP}/tmp/scrcpy-dl" "${CHROOT_TMP}/usr/share/scrcpy"
+    if curl -fsSL -L "https://github.com/Genymobile/scrcpy/releases/download/v3.1/scrcpy-linux-x86_64-v3.1.tar.gz" -o "${CHROOT_TMP}/tmp/scrcpy-dl/scrcpy.tar.gz"; then
+        tar -xzf "${CHROOT_TMP}/tmp/scrcpy-dl/scrcpy.tar.gz" -C "${CHROOT_TMP}/tmp/scrcpy-dl/"
+        cp -f "${CHROOT_TMP}/tmp/scrcpy-dl/scrcpy-linux-x86_64-v3.1/scrcpy" "${CHROOT_TMP}/usr/bin/scrcpy"
+        cp -f "${CHROOT_TMP}/tmp/scrcpy-dl/scrcpy-linux-x86_64-v3.1/scrcpy-server" "${CHROOT_TMP}/usr/share/scrcpy/scrcpy-server"
+        chmod 755 "${CHROOT_TMP}/usr/bin/scrcpy"
+        chmod 644 "${CHROOT_TMP}/usr/share/scrcpy/scrcpy-server"
+        rm -rf "${CHROOT_TMP}/tmp/scrcpy-dl"
+        echo "[patch] scrcpy installed successfully."
+    else
+        echo "[patch] Warning: Failed to download scrcpy."
+    fi
+fi
+
+# Enable NTP time synchronization by default
+chroot "${CHROOT_TMP}" systemctl enable systemd-timesyncd.service 2>/dev/null || true
 
 # Enable virtualization guest integration services and kernel modules
 for svc in open-vm-tools.service spice-vdagentd.service; do

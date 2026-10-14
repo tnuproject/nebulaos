@@ -90,7 +90,22 @@ chroot "${CHROOT_DIR}" apt-get install -y --no-install-recommends \
     wireless-regdb wpasupplicant wireless-tools bluez bluez-firmware pulseaudio-utils \
     mesa-va-drivers mesa-vdpau-drivers mesa-vulkan-drivers pciutils usbutils xserver-xorg-video-all \
     xserver-xorg-video-intel xserver-xorg-video-amdgpu xserver-xorg-video-nouveau \
-    scrcpy adb systemd-timesyncd
+    adb systemd-timesyncd libsdl2-2.0-0 libusb-1.0-0 curl tar
+
+# Install scrcpy official portable Linux release (Debian Bookworm does not include scrcpy in repos)
+echo "[base] Installing scrcpy portable release..."
+mkdir -p "${CHROOT_DIR}/tmp/scrcpy-dl" "${CHROOT_DIR}/usr/share/scrcpy"
+if curl -fsSL -L "https://github.com/Genymobile/scrcpy/releases/download/v3.1/scrcpy-linux-x86_64-v3.1.tar.gz" -o "${CHROOT_DIR}/tmp/scrcpy-dl/scrcpy.tar.gz"; then
+    tar -xzf "${CHROOT_DIR}/tmp/scrcpy-dl/scrcpy.tar.gz" -C "${CHROOT_DIR}/tmp/scrcpy-dl/"
+    cp -f "${CHROOT_DIR}/tmp/scrcpy-dl/scrcpy-linux-x86_64-v3.1/scrcpy" "${CHROOT_DIR}/usr/bin/scrcpy"
+    cp -f "${CHROOT_DIR}/tmp/scrcpy-dl/scrcpy-linux-x86_64-v3.1/scrcpy-server" "${CHROOT_DIR}/usr/share/scrcpy/scrcpy-server"
+    chmod 755 "${CHROOT_DIR}/usr/bin/scrcpy"
+    chmod 644 "${CHROOT_DIR}/usr/share/scrcpy/scrcpy-server"
+    rm -rf "${CHROOT_DIR}/tmp/scrcpy-dl"
+    echo "[base] scrcpy installed successfully."
+else
+    echo "[base] Warning: Failed to download scrcpy release."
+fi
 
 # Configure live-config defaults
 mkdir -p "${CHROOT_DIR}/etc/live"

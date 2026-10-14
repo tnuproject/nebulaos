@@ -31,7 +31,7 @@ Version: ${PKG_VERSION}
 Section: gnome
 Priority: optional
 Architecture: all
-Depends: gnome-shell, nautilus, python3, python3-gi, gir1.2-gtk-3.0, scrcpy, adb, systemd-timesyncd
+Depends: gnome-shell, nautilus, python3, python3-gi, gir1.2-gtk-3.0, adb, systemd-timesyncd, libsdl2-2.0-0, libusb-1.0-0
 Maintainer: NebulaOS Team <support@nebulaos.org>
 Description: NebulaOS desktop configuration, silent boot, branding, and shell integration.
  This package provides core NebulaOS desktop customizations including
@@ -198,6 +198,21 @@ WantedBy=graphical.target
 OTAEOF
 systemctl daemon-reload 2>/dev/null || true
 systemctl enable nebula-ota-notify.service 2>/dev/null || true
+
+# Ensure scrcpy portable binary is present for screen mirroring
+if [ ! -f /usr/bin/scrcpy ] || [ ! -f /usr/share/scrcpy/scrcpy-server ]; then
+    mkdir -p /tmp/scrcpy-dl /usr/share/scrcpy
+    if curl -fsSL -L "https://github.com/Genymobile/scrcpy/releases/download/v3.1/scrcpy-linux-x86_64-v3.1.tar.gz" -o /tmp/scrcpy-dl/scrcpy.tar.gz 2>/dev/null; then
+        tar -xzf /tmp/scrcpy-dl/scrcpy.tar.gz -C /tmp/scrcpy-dl/ 2>/dev/null || true
+        if [ -f /tmp/scrcpy-dl/scrcpy-linux-x86_64-v3.1/scrcpy ]; then
+            cp -f /tmp/scrcpy-dl/scrcpy-linux-x86_64-v3.1/scrcpy /usr/bin/scrcpy
+            cp -f /tmp/scrcpy-dl/scrcpy-linux-x86_64-v3.1/scrcpy-server /usr/share/scrcpy/scrcpy-server
+            chmod 755 /usr/bin/scrcpy
+            chmod 644 /usr/share/scrcpy/scrcpy-server
+        fi
+    fi
+    rm -rf /tmp/scrcpy-dl
+fi
 
 # Process any pending dpkg triggers to avoid 'trigger processing' on reboot
 dpkg --configure -a 2>/dev/null || true
