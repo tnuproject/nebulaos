@@ -99,6 +99,10 @@ def launch_scrcpy(target=None, phone_name="Android Phone"):
         if os.path.isfile(sp):
             env["SCRCPY_SERVER_PATH"] = sp
             break
+    # Portable scrcpy looks for adb next to its own binary unless ADB is set
+    adb_bin = shutil.which("adb")
+    if adb_bin and "ADB" not in env:
+        env["ADB"] = adb_bin
     try:
         proc = subprocess.Popen(cmd, env=env)
         return True, proc
